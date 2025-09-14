@@ -1,0 +1,2856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Handy AI Chat</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+        :root {
+            --background-darker: #21222C;
+            --background: #282a36;
+            --background-lighter: #343746;
+            --foreground: #f8f8f2;
+            --comment: #6272a4;
+            --cyan: #8be9fd;
+            --purple: #bd93f9;
+            --pink: #ff79c6;
+            --red: #ff5555;
+            --yellow: #f1fa8c;
+            --shadow: rgba(0, 0, 0, 0.2);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-darker);
+            color: var(--foreground);
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            transition: grid-template-columns 0.35s ease-in-out;
+        }
+        body.sidebar-collapsed { grid-template-columns: 1fr 0px; }
+
+        #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; transition: opacity 1s ease-out; opacity: 1; }
+        #splash-screen.hidden { opacity: 0; pointer-events: none; }
+        #splash-screen img { max-width: 90%; max-height: 70%; object-fit: contain; border-radius: 16px; }
+        #splash-screen p { margin-top: 20px; font-size: 2rem; color: #fff; text-shadow: 0 0 10px var(--pink), 0 0 20px var(--pink); animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+
+        #main-area { flex-grow: 1; display: flex; flex-direction: column; height: 100%; background-color: var(--background); overflow: hidden; }
+        
+        #sidebar { padding: 20px; background-color: var(--background-darker); overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 20px; border-left: 1px solid var(--background-lighter); }
+       
+        #top-bar { padding: 10px 20px; background-color: var(--background); border-bottom: 1px solid var(--background-lighter); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; position: relative; }
+        #toggle-sidebar-btn { position: absolute; top: 50%; right: 20px; transform: translateY(-50%); background: var(--background-lighter); border: none; color: var(--foreground); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; transition: transform 0.3s ease-in-out, background-color 0.2s ease; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
+        #toggle-sidebar-btn:hover { background-color: var(--comment); }
+        body.sidebar-collapsed #toggle-sidebar-btn { transform: translateY(-50%) rotate(180deg); }
+
+        #top-bar h1 { margin: 0; font-size: 1.5rem; color: var(--cyan); font-weight: 600; letter-spacing: 1px; text-shadow: 0 0 5px rgba(139, 233, 253, 0.4); }
+        #top-bar .top-bar-info { display: flex; align-items: center; gap: 15px; margin-right: 45px; }
+        #mood-display, #edging-timer { background-color: var(--background-lighter); padding: 6px 12px; border-radius: 8px; font-size: 0.9em; }
+        #edging-timer { color: var(--yellow); font-weight: 600; }
+
+        #chat-view { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; 
+    position: relative;
+}
+        #bottom-input-area { padding: 20px; border-top: 1px solid var(--background-lighter); background-color: var(--background); flex-shrink: 0; }
+
+        .chat-message-container { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 15px; max-width: 85%; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .chat-pfp { width: 512px; height: 512px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .message-content { display: flex; flex-direction: column; }
+        .message-bubble { padding: 12px 16px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; }
+        .message-bubble pre { font-family: 'Courier New', Courier, monospace; font-size: 0.9em; text-align: left; white-space: pre; }
+        
+        .bot-bubble { align-self: flex-start; }
+        .bot-bubble .message-bubble { background-color: var(--background-lighter); border-top-left-radius: 4px; }
+        .bot-bubble .speaker-name { align-self: flex-start; }
+
+        .user-bubble { align-self: flex-end; }
+        .user-bubble .message-bubble { background-color: var(--comment); color: var(--foreground); border-top-right-radius: 4px; }
+        
+        .speaker-name { font-size: 0.8em; margin-bottom: 4px; color: var(--purple); font-weight: 600; }
+        .user-bubble .speaker-name { align-self: flex-end; }
+        
+        #visualizer-box { height: 40px; background-color: var(--background-darker); border-radius: 8px; margin-bottom: 15px; padding: 5px; }
+        .setting-section { border-radius: 12px; padding: 15px; background-color: var(--background); box-shadow: 0 4px 12px var(--shadow); }
+        .setting-section h3 { margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; font-weight: 600; color: var(--cyan); border-bottom: 1px solid var(--background-lighter); padding-bottom: 10px; }
+        
+        .my-button { padding: 10px 16px; border: none; background-color: var(--comment); color: var(--foreground); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; font-size: 1em; font-weight: 600; width: 100%; box-shadow: 0 2px 4px var(--shadow); }
+        .my-button:hover { background-color: #798dcc; transform: translateY(-2px); box-shadow: 0 4px 8px var(--shadow); }
+        .my-button:active { transform: translateY(0); box-shadow: 0 2px 4px var(--shadow); }
+        .sidebar-button.edging { background-color: var(--yellow); color: var(--background); }
+        .sidebar-button.edging:hover { background-color: #f7ffae; }
+        .sidebar-button.milking { background-color: var(--pink); }
+        .sidebar-button.milking:hover { background-color: #ff92d0; }
+        .sidebar-button.stop { background-color: var(--red); }
+        .sidebar-button.stop:hover { background-color: #ff6e6e; }
+
+        .input-text, .select-box, input[type="number"] { padding: 10px; border: 1px solid var(--background-lighter); background-color: var(--background-lighter); color: var(--foreground); border-radius: 8px; font-size: 1em; width: 100%; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+        .input-text:focus, .select-box:focus, input[type="number"]:focus { outline: none; border-color: var(--purple); box-shadow: 0 0 0 3px rgba(189, 147, 249, 0.3); }
+
+        #message-input-line { display: flex; gap: 10px; align-items: center; }
+        #message-input-line .my-button { width: auto; flex-shrink: 0; }
+        #message-input-line .input-text { flex-grow: 1; }
+
+        .audio-toggle-line { display: flex; align-items: center; gap: 8px; padding-top: 10px; }
+
+        #status-text { margin-top: 15px; font-size: 0.9em; text-align: center; color: var(--purple); }
+        #setup-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 9999; color: var(--foreground); }
+        #setup-box { text-align: center; background-color: var(--background); padding: 30px; border-radius: 12px; border: 1px solid var(--background-lighter); box-shadow: 0 8px 32px var(--shadow); }
+        #setup-box h2 { color: var(--cyan); margin-top: 0; }
+        #setup-box button { margin-top: 15px; }
+        .slider-container { margin: 15px 0; }
+        
+        .timing-row { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
+        .timing-row label { flex-basis: 50px; font-size: 0.9em; }
+        .timing-row input { flex-grow: 1; width: 40px; }
+        .timing-row span { padding: 0 5px; }
+
+        .typing-dots span { display: inline-block; animation: blink 1.4s infinite both; font-size: 1.5em; line-height: 0; }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+
+        #easter-egg-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: #0f0; font-family: 'Courier New', monospace; font-size: 1.5em; display: none; align-items: center; justify-content: center; z-index: 10001; opacity: 0; transition: opacity 1s ease-in-out; text-align: center; }
+
+    
+
+/* --- Slideshow stage in main area --- */
+.slideshow-stage { position:absolute; right: 24px; top: 72px; width: 38vw; height: 60vh;
+    background: var(--background-darker); border:1px solid var(--background-lighter);
+    border-radius: 12px; display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35); padding: 10px; }
+.slideshow-stage img { max-width:100%; max-height:100%; object-fit: contain; border-radius: 8px; }
+.hidden { display: none !important; }
+
+
+/* --- Second slideshow stage in main area --- */
+.slideshow-stage-2 { position:absolute; right: 24px; top: calc(72px + 62vh + 24px); width: 38vw; height: 34vh;
+    background: var(--background-darker); border:1px solid var(--background-lighter);
+    border-radius: 12px; display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35); padding: 10px; }
+.slideshow-stage-2 img { max-width:100%; max-height:100%; object-fit: contain; border-radius: 8px; }
+
+/* === Floating Video (PiP) === */
+#pip-window{position:absolute; right:24px; bottom:24px; width:360px; height:203px; background:var(--background-darker); border:1px solid var(--background-lighter); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.35); display:none; flex-direction:column; overflow:hidden; z-index:10040;}
+#pip-window.show{display:flex;}
+#pip-header{cursor:move; user-select:none; padding:8px 10px; font-size:.9em; color:var(--cyan); background:linear-gradient(0deg, var(--background), var(--background-lighter)); display:flex; align-items:center; justify-content:space-between;}
+#pip-header .btns{display:flex; gap:6px;}
+#pip-header button{border:none; background:var(--background-darker); color:var(--foreground); padding:6px 8px; border-radius:8px; cursor:pointer;}
+#pip-header button:hover{background:var(--comment);}
+
+/* === Generic PiP windows for Images & GIFs === */
+.pip.win{ position:absolute; right:24px; top:72px; width:38vw; height:60vh;
+    background: var(--background-darker); border:1px solid var(--background-lighter);
+    border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.4); overflow:hidden; z-index:10040; display:none; }
+.pip.win.show{ display:block; }
+.pip-header{ height:36px; background:linear-gradient(180deg, var(--background), var(--background-lighter)); display:flex; align-items:center; justify-content:space-between; cursor:move; user-select:none; }
+.pip-header .btns{display:flex; gap:6px;}
+.pip-header button{ border:none; background:var(--background-darker); color:var(--foreground); padding:6px 8px; border-radius:8px; cursor:pointer; }
+.pip-header button:hover{ background:var(--comment); }
+.pip-body{ position:relative; width:100%; height:calc(100% - 36px); }
+.pip-resizer{ position:absolute; width:14px; height:14px; right:2px; bottom:2px; cursor:nwse-resize; background:linear-gradient(135deg, transparent 40%, var(--comment) 40%); border-bottom-right-radius:10px; opacity:.8;}
+.hidden{ display:none; }
+#pip-video{width:100%; height:100%; background:#000; object-fit:contain;}
+#pip-resizer{position:absolute; width:14px; height:14px; right:2px; bottom:2px; cursor:nwse-resize; background:linear-gradient(135deg, transparent 40%, var(--comment) 40%); border-bottom-right-radius:10px; opacity:.8;}
+
+/* Avatar 3x (288x288) — override non distruttivo */
+.chat-pfp{
+  width: 512px !important©2px !important;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.chat-message-container{ gap: 16px; align-items: flex-start; }
+
+
+/* --- Manual Controls Panel (bottom under chat) --- */
+#manual-panel{background:var(--background-lighter);border:1px solid var(--background-darker);border-radius:10px;margin-top:14px}
+#manual-panel .mp-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;user-select:none}
+#manual-panel .mp-header h3{margin:0;font-size:1rem;color:var(--cyan)}
+#manual-panel .mp-resize{height:8px;cursor:ns-resize;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0));border-top:1px solid var(--background)}
+#manual-panel .mp-content{padding:12px}
+#manual-panel .row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin-bottom:12px}
+#manual-panel input[type="range"]{width:100%}
+
+
+/* === BotSelfie: small persona preview (right panel only) === */
+#ai-pfp-preview{
+  width: 96px !important;
+  height: 96px !important;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* === BotSelfie: keep chat avatar fully visible (non-invasive) === */
+.chat-message-container{ 
+  overflow: visible !important;
+  max-width: 100% !important;   /* allow room for avatar + bubble */
+  gap: 14px;                     /* spacing between avatar and bubble */
+  align-items: flex-start !important;
+}
+.chat-message-container .message-content{
+  max-width: 85%;
+  position: relative;
+  z-index: 1;
+}
+.chat-message-container .chat-pfp{
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.bot-bubble{ overflow: visible !important; }
+
+
+/* === BotSelfie: anti-clipping harden (containers) === */
+#chat-messages, .chat-view, .chat-window, .chat-scroll, .message-list{
+  overflow: visible !important;
+}
+.chat-message-container{
+  flex-wrap: nowrap !important;   /* keep avatar + bubble on one row */
+}
+.chat-message-container .chat-pfp{
+  margin-top: 8px;                 /* avoid top cropping under sticky headers */
+}
+
+
+/* === BotSelfie: avatar shape/fit controls (scoped) === */
+.pfp-shape-circle{ border-radius:50% !important; }
+.pfp-shape-rounded{ border-radius:20px !important; }
+.pfp-shape-rect{ border-radius:0 !important; }
+
+.pfp-fit-cover{ object-fit:cover !important; }
+.pfp-fit-contain{ object-fit:contain !important; background-color: rgba(0,0,0,0.35); }
+
+/* Make sure the big avatar respects custom size and never gets clipped */
+#typing-indicator-pfp, #chat-pfp-video{
+  display:block;
+  flex-shrink:0;
+}
+
+
+/* === HARD OVERRIDE: avatar as rounded rectangle (contain) everywhere === */
+#typing-indicator-pfp,
+#chat-pfp-video,
+.chat-message-container img.chat-pfp,
+.chat-message-container video.chat-pfp {
+  border-radius: 20px !important;
+  object-fit: contain !important;
+  background-color: rgba(0,0,0,0.35);
+  overflow: visible !important;
+  clip-path: none !important;
+  -webkit-clip-path: none !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+
+/* ensure parent containers never clip the avatar */
+.chat-message-container,
+#chat-messages, .chat-view, .chat-window, .chat-scroll, .message-list {
+  overflow: visible !important;
+}
+
+
+/* === GRID LAYOUT WITH LEFT PROFILE COLUMN === */
+#chat-view{
+  display: grid;
+  grid-template-columns: 512px 24px 1fr;
+  grid-auto-rows: max-content;
+  align-items: start;
+}
+#profile-rail{
+  grid-column: 1;
+  grid-row: 1 / -1;            /* spans all rows */
+  position: sticky;
+  top: calc(50vh - 360px);     /* vertically centered 512/2 */
+  align-self: start;
+}
+#profile-media{
+  width: 512px;
+  height: 512px;
+}
+#profile-media img, #profile-media video{
+  width: 512px !important;
+  height: 512px !important;
+  display: block;
+}
+
+/* Place all chat bubbles in the right column */
+#chat-view > .chat-message-container{
+  grid-column: 3;
+  max-width: min(820px, 100%);
+}
+/* Bot on the left edge of chat column */
+#chat-view > .chat-message-container.bot-bubble{
+  justify-self: start;
+}
+/* User on the right edge of chat column */
+#chat-view > .chat-message-container.user-bubble{
+  justify-self: end;
+}
+
+/* Responsive: collapse to single column under 1200px */
+@media (max-width: 1200px){
+  #chat-view{
+    grid-template-columns: 1fr;
+  }
+  #profile-rail{
+    position: relative;
+    top: 0;
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0 auto 16px;
+  }
+  #chat-view > .chat-message-container{
+    grid-column: 1;
+  }
+}
+
+
+/* Ensure the dynamic message stream sits in the right grid column */
+#chat-messages-container{
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+/* Bubble sizing & wrapping */
+.chat-message-container{
+  max-width: min(820px, 100%);
+  display: flex;
+  flex-direction: column;
+}
+.chat-message-container .message-bubble{
+  max-width: 85%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Align edges */
+.chat-message-container.bot-bubble{ align-self: flex-start; text-align: left; }
+.chat-message-container.user-bubble{ align-self: flex-end;   text-align: right; }
+
+/* Speaker label alignment */
+.chat-message-container.bot-bubble .speaker-name{ align-self: flex-start; }
+.chat-message-container.user-bubble .speaker-name{ align-self: flex-end;  }
+
+
+/* --- Chat alignment & wrapping fixes --- */
+#chat-messages-container{
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+#chat-view > .chat-message-container{
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;                 /* take full chat column width */
+}
+#chat-view > .chat-message-container.bot-bubble{
+  align-items: flex-start;      /* left */
+}
+#chat-view > .chat-message-container.user-bubble{
+  align-items: flex-end;        /* right */
+}
+.chat-message-container .message-content{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.chat-message-container.user-bubble .message-content{
+  align-items: flex-end;
+}
+.chat-message-container .message-bubble{
+  display: block;
+  max-width: min(820px, 100%);  /* readable width cap */
+  white-space: normal;          /* avoid per-letter vertical stacking */
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Hide any legacy PFP inside the typing indicator while the bot is writing */
+#typing-indicator .chat-pfp{ display: none !important; }
+
+
+/* === FINAL OVERRIDES: layout, wrapping, alignment === */
+#chat-messages-container{
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+#chat-messages-container > .chat-message-container{
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start;
+}
+#chat-messages-container > .chat-message-container.user-bubble{
+  align-items: flex-end !important;      /* user -> right */
+}
+#chat-messages-container > .chat-message-container.bot-bubble{
+  align-items: flex-start !important;     /* bot -> left */
+}
+#chat-messages-container .message-content{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: inherit !important;        /* follow container alignment */
+  max-width: 100% !important;
+}
+#chat-messages-container .message-bubble{
+  display: inline-block !important;
+  max-width: min(860px, 100%) !important; /* wide, readable */
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  line-height: 1.4 !important;
+}
+
+
+/* Narrative (actions/thoughts) — italic + attenuated color */
+.narrative{
+  font-style: italic;
+  color: var(--comment, #9aa3b2);
+}
+
+
+/* Narrative style (thoughts/actions) */
+.narrative{
+  font-style: italic;
+  color: #9fa6b2; /* faded greyish like your example screenshot */
+}
+
+/* Speech style (first person) */
+.message-bubble{
+  font-weight: bold; /* bold by default for spoken text */
+  color: #fff;       /* keep bright white for clarity */
+}
+
+</style>
+</head>
+<body>
+    <div id="splash-screen">
+        <img src="/static/splash.jpg" alt="StrokeGPT">
+        <p>Press Enter to Begin</p>
+    </div>
+    <div id="main-area">
+        <div id="top-bar">
+            <h1>StrokeGPT</h1>
+            <div class="top-bar-info">
+                <div id="edging-timer" style="display: none;">00:00</div>
+                <div id="mood-display">Mood: ...</div>
+            </div>
+            <button id="toggle-sidebar-btn">&laquo;</button>
+        </div>
+        <div id="chat-view">
+
+            <!-- Left persistent profile rail -->
+            <aside id="profile-rail">
+              <div id="profile-media">
+                <img class="chat-pfp pfp-shape-rounded pfp-fit-contain" id="typing-indicator-pfp" src="/static/default-pfp.png" alt="pfp">
+                <video id="chat-pfp-video" class="chat-pfp pfp-shape-rounded pfp-fit-contain" muted playsinline style="display:none;"></video>
+              </div>
+            </aside>
+
+            <div id="upd-stage" class="slideshow-stage hidden"><img id="upd-stage-img" src="" alt="Slideshow stage"></div>
+            <div id="upd2-stage" class="slideshow-stage-2 hidden"><img id="upd2-stage-img" src="" alt="GIF stage"></div>
+            <div id="pip-window" class="">
+                <div id="pip-header">
+                    <span class="title">Video locale</span>
+                    <div class="btns">
+                        <button id="pip-minmax">—</button>
+                        <button id="pip-close">✕</button>
+                    </div>
+                </div>
+                <video id="pip-video" playsinline></video>
+                <div id="pip-resizer" title="Ridimensiona"></div>
+            </div>
+
+<div id="pip-image-window" class="pip win hidden">
+    <div class="pip-header">
+        <span class="title">Immagini (PiP)</span>
+        <div class="btns">
+            <button class="pip-minmax">—</button>
+            <button class="pip-close">✕</button>
+        </div>
+    </div>
+    <div class="pip-body">
+        <img id="pip-image" alt="pip image" style="width:100%;height:100%;object-fit:contain;background:#000;">
+    </div>
+    <div class="pip-resizer"></div>
+</div>
+
+<div id="pip-gif-window" class="pip win hidden">
+    <div class="pip-header">
+        <span class="title">GIF (PiP)</span>
+        <div class="btns">
+            <button class="pip-minmax">—</button>
+            <button class="pip-close">✕</button>
+        </div>
+    </div>
+    <div class="pip-body">
+        <img id="pip-gif" alt="pip gif" style="width:100%;height:100%;object-fit:contain;background:#000;">
+    </div>
+    <div class="pip-resizer"></div>
+</div>
+
+
+            <div id="chat-messages-container">
+                <div id="typing-indicator" class="chat-message-container bot-bubble" style="display: none;">
+                    <img class="chat-pfp pfp-shape-rounded pfp-fit-contain" id="typing-indicator-pfp" src="/static/default-pfp.png" alt="pfp">                    <video id="chat-pfp-video" class="chat-pfp pfp-shape-rounded pfp-fit-contain" muted playsinline style="display:none;border-radius:50%;object-fit:cover;"></video>
+                    <div class="message-content">
+                        <p class="speaker-name">BOT</p>
+                        <p class="message-bubble typing-dots"><span>.</span><span>.</span><span>.</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="bottom-input-area">
+            <div id="visualizer-box"><canvas id="rhythm-canvas"></canvas></div>
+            <div id="message-input-line">
+                <input type="text" id="user-chat-input" class="input-text" placeholder="Type a message or command...">
+                <button id="send-chat-btn" class="my-button">Send</button>
+            </div>
+             <div id="status-text">Status: Checking for saved settings...</div>
+            <div id="manual-panel">
+              <div class="mp-header"><h3>Controlli Manuali</h3><button id="mp-toggle" class="my-button" style="padding:4px 8px">▾</button></div>
+              <div class="mp-resize" id="mp-resize"></div>
+              <div class="mp-content" id="mp-content">
+                <div class="row"><label>Velocità (%)</label><span id="ctl-sp-val">50</span><input type="range" id="ctl-sp" min="0" max="100" step="1" value="50" style="grid-column:1/-1"></div>
+                <div class="row"><label>Posizione / Depth (%) <span style="font-size:.85em;color:#aaa">0=base · 100=punta</span></label><span id="ctl-dp-val">50</span><input type="range" id="ctl-dp" min="0" max="100" step="1" value="50" style="grid-column:1/-1"></div>
+                <div class="row"><label>Lunghezza / Range (%)</label><span id="ctl-rng-val">50</span><input type="range" id="ctl-rng" min="0" max="100" step="1" value="50" style="grid-column:1/-1"></div>
+                <div style="display:flex;gap:10px;align-items:center;margin:10px 0">
+                  <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ctl-full"> Full Stroke (0–100)</label>
+                  <label style="display:flex;align-items:center;gap:8px;margin-left:auto"><input type="checkbox" id="ctl-adv"> Modalità avanzata</label>
+                </div>
+                <div id="adv-box" style="display:none;margin-top:6px">
+                  <div class="row"><label>Inizio (%)</label><span id="ctl-start-val">0</span><input type="range" id="ctl-start" min="0" max="100" step="1" value="0" style="grid-column:1/-1"></div>
+                  <div class="row"><label>Fine (%)</label><span id="ctl-end-val">100</span><input type="range" id="ctl-end" min="0" max="100" step="1" value="100" style="grid-column:1/-1"></div>
+                </div>
+                <button id="ctl-apply" class="my-button" style="margin-top:6px">Applica</button>
+              </div>
+            </div>
+    
+        </div>
+    </div>
+    <div id="sidebar">
+        <div class="setting-section">
+            <h3>Persona</h3>
+            <label for="pfp-upload" style="cursor: pointer; display: block; margin-bottom: 15px;">
+                <img id="ai-pfp-preview" src="/static/default-pfp.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin: 10px auto; display: block; border: 2px solid var(--comment);">
+            </label>
+            <input type="file" id="pfp-upload" accept="image/*" style="display: none;">
+            <input type="text" id="ai-name-input" class="input-text" placeholder="AI's Name..." style="margin-bottom: 10px;">
+            <button id="set-ai-name-btn" class="my-button" style="margin-bottom: 15px;">Set Name</button>
+            <input type="text" id="persona-input" class="input-text" placeholder="Describe the AI's persona...">
+            <button id="set-persona-btn" class="my-button" style="margin-top: 10px;">Set Persona</button>
+        </div>
+        <div class="setting-section">
+            
+        <div class="setting-section" id="botselfie-controls">
+            <h3>BotSelfie (Avatar)</h3>
+            <label style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+                <input type="checkbox" id="pfp-random" checked> Random dalla cartella
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+                <input type="checkbox" id="pfp-loop" checked> Loop video
+            </label>
+            <label for="pfp-interval" style="display:block;margin-top:8px;">Cambio ogni: <span id="pfp-interval-label">10s</span></label>
+            <input type="range" id="pfp-interval" min="1" max="60" step="1" value="10" style="width:100%;margin-top:4px;">
+            <button id="pfp-apply" class="my-button" style="margin-top:10px;">Applica</button>
+        </div>
+    
+            <h3>Mode Timings (Seconds)</h3>
+            <div class="timing-row"><label for="auto-min-time">Auto:</label><input type="number" id="auto-min-time" min="1" max="60" step="1" value="4"><span>-</span><input type="number" id="auto-max-time" min="1" max="60" step="1" value="7"></div>
+            <div class="timing-row"><label for="edging-min-time">Edging:</label><input type="number" id="edging-min-time" min="1" max="60" step="1" value="5"><span>-</span><input type="number" id="edging-max-time" min="1" max="60" step="1" value="8"></div>
+            <div class="timing-row"><label for="milking-min-time">Milking:</label><input type="number" id="milking-min-time" min="1" max="60" step="1" value="2"><span>-</span><input type="number" id="milking-max-time" min="1" max="60" step="1" value="5"></div>
+            <button id="save-timings-btn" class="my-button">Save Timings</button>
+        </div>
+        <div class="setting-section">
+            <h3>Voice Output (ElevenLabs)</h3>
+            <input type="password" id="elevenlabs-key-input" class="input-text" placeholder="ElevenLabs API Key">
+            <button id="set-elevenlabs-key-button" class="my-button">Set Key</button>
+            <select id="elevenlabs-voice-select-box" class="select-box" disabled><option>Set API Key to load voices...</option></select>
+            <div class="audio-toggle-line"><input type="checkbox" id="enable-audio-checkbox"><label for="enable-audio-checkbox">Enable Audio</label></div>
+        </div>
+        <div class="setting-section">
+            <h3>Control Actions</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;"><button id="start-auto-btn" class="my-button" style="flex: 1;">Start Auto</button><button id="stop-auto-btn" class="my-button" style="flex: 1;">Stop Auto</button></div>
+            <div style="display: flex; gap: 10px;"><button id="like-this-move-btn" class="my-button" style="flex: 1;">👍 Like</button><button id="toggle-memory-btn" class="my-button" style="flex: 1;">Memories: ON</button></div>
+            <button id="im-close-btn" class="my-button sidebar-button milking" style="display: none; margin-top: 10px;">I'm Close!</button>
+        </div>
+        
+        <div class="setting-section" id="adv-stroke-settings">
+            <h3>Advanced Stroke Settings</h3>
+            <p style="font-size: 0.9em;">Customize the stroke envelopes for each phase. Durations are in seconds.</p>
+            <div class="adv-phase" data-phase="WARM-UP">
+                <h4 style="margin-bottom:4px;">Warm-Up</h4>
+                <div class="timing-row"><label>Speed Min</label><input type="number" class="adv-sp-min" min="1" max="100" value="15"><span>-</span><input type="number" class="adv-sp-max" min="1" max="100" value="35"></div>
+                <div class="timing-row"><label>Depth Min</label><input type="number" class="adv-dp-min" min="0" max="100" value="40"><span>-</span><input type="number" class="adv-dp-max" min="0" max="100" value="60"></div>
+                <div class="timing-row"><label>Range Min</label><input type="number" class="adv-rng-min" min="0" max="100" value="25"><span>-</span><input type="number" class="adv-rng-max" min="0" max="100" value="45"></div>
+                <div class="timing-row"><label>Dur Min (s)</label><input type="number" class="adv-dur-min" min="0" max="20" step="0.1" value="3"><span>-</span><input type="number" class="adv-dur-max" min="0" max="20" step="0.1" value="3.5"></div>
+            </div>
+            <div class="adv-phase" data-phase="ACTIVE">
+                <h4 style="margin-bottom:4px;">Active</h4>
+                <div class="timing-row"><label>Speed Min</label><input type="number" class="adv-sp-min" min="1" max="100" value="45"><span>-</span><input type="number" class="adv-sp-max" min="1" max="100" value="85"></div>
+                <div class="timing-row"><label>Depth Min</label><input type="number" class="adv-dp-min" min="0" max="100" value="50"><span>-</span><input type="number" class="adv-dp-max" min="0" max="100" value="80"></div>
+                <div class="timing-row"><label>Range Min</label><input type="number" class="adv-rng-min" min="0" max="100" value="50"><span>-</span><input type="number" class="adv-rng-max" min="0" max="100" value="80"></div>
+                <div class="timing-row"><label>Dur Min (s)</label><input type="number" class="adv-dur-min" min="0" max="20" step="0.1" value="3.5"><span>-</span><input type="number" class="adv-dur-max" min="0" max="20" step="0.1" value="5"></div>
+            </div>
+            <div class="adv-phase" data-phase="RECOVERY">
+                <h4 style="margin-bottom:4px;">Recovery</h4>
+                <div class="timing-row"><label>Speed Min</label><input type="number" class="adv-sp-min" min="1" max="100" value="5"><span>-</span><input type="number" class="adv-sp-max" min="1" max="100" value="15"></div>
+                <div class="timing-row"><label>Depth Min</label><input type="number" class="adv-dp-min" min="0" max="100" value="35"><span>-</span><input type="number" class="adv-dp-max" min="0" max="100" value="55"></div>
+                <div class="timing-row"><label>Range Min</label><input type="number" class="adv-rng-min" min="0" max="100" value="20"><span>-</span><input type="number" class="adv-rng-max" min="0" max="100" value="40"></div>
+                <div class="timing-row"><label>Dur Min (s)</label><input type="number" class="adv-dur-min" min="0" max="20" step="0.1" value="3.5"><span>-</span><input type="number" class="adv-dur-max" min="0" max="20" step="0.1" value="4.5"></div>
+            </div>
+            <div class="timing-row"><label>Moves</label><input type="number" id="adv-num-moves" min="1" max="20" value="10"></div>
+            <div class="timing-row"><label>Hold Prob</label><input type="number" id="adv-hold-prob" min="0" max="1" step="0.05" value="0.6"></div>
+            <button id="adv-save-btn" class="my-button" style="margin-top:6px;">Save Advanced Settings</button>
+        </div>
+        
+        
+<div class="setting-section">
+            <h3>Slideshow (Updates)</h3>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><label style="display:flex;align-items:center;gap:6px;margin-right:auto;"><input type="checkbox" id="upd-pin"> Pin to main</label>
+                <button id="upd-prev" class="my-button" style="width:auto;padding:6px 10px;">◀</button>
+                <button id="upd-next" class="my-button" style="width:auto;padding:6px 10px;">▶</button>
+                <button id="upd-toggle" class="my-button" style="width:auto;padding:6px 10px;margin-left:auto;">Start</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <label for="upd-interval" style="font-size:0.9em;">Speed</label>
+                <input type="range" id="upd-interval" min="3" max="20" step="1" value="10" style="flex:1;">
+                <span id="upd-ival" style="min-width:30px;text-align:right;">10s</span>
+            </div>
+            <img id="upd-preview" src="" alt="Slideshow preview" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--background-lighter);background:var(--background-darker);" />
+            <div style="font-size:0.8em;color:var(--comment);margin-top:6px;">Folder: <code>static/updates</code> (random)</div>
+        </div>
+
+        <div class="setting-section">
+            <h3>Slideshow (GIFs)</h3>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                <label style="display:flex;align-items:center;gap:6px;margin-right:auto;">
+                    <input type="checkbox" id="upd2-pin"> Pin to main
+                </label>
+                <button id="upd2-prev" class="my-button" style="width:auto;padding:6px 10px;">◀</button>
+                <button id="upd2-next" class="my-button" style="width:auto;padding:6px 10px;">▶</button>
+                <button id="upd2-toggle" class="my-button" style="width:auto;padding:6px 10px;margin-left:auto;">Start</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                <label for="upd2-interval" style="font-size:0.9em;">Speed</label>
+                <input type="range" id="upd2-interval" min="3" max="20" step="1" value="8" style="flex:1;">
+                <span id="upd2-ival" style="min-width:30px;text-align:right;">8s</span>
+            </div>
+            <img id="upd2-preview" src="" alt="GIF preview" style="width:100%;max-height:180px;object-fit:contain;border-radius:8px;border:1px solid var(--background-lighter);background:var(--background-darker);" />
+            <div style="font-size:0.8em;color:var(--comment);margin-top:6px;">Folder: <code>static/updates/gif</code> (random)</div>
+        </div>
+
+
+        
+        <div class="setting-section">
+            <h3>Video (PiP locale)</h3>
+            <input type="file" id="pip-file" accept="video/*" class="input-text" style="padding:8px;background:transparent;border:none;">
+            <div style="display:flex; gap:10px; margin:10px 0;">
+                <button id="pip-load" class="my-button" style="flex:1;">Carica</button>
+                <button id="pip-toggle" class="my-button" style="flex:1;">Mostra</button>
+            </div>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <button id="pip-play" class="my-button" style="flex:1;">Play</button>
+                <button id="pip-pause" class="my-button" style="flex:1;">Pausa</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <label style="font-size:.9em;">Volume</label>
+                <input type="range" id="pip-volume" min="0" max="1" step="0.01" value="1" style="flex:1;">
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" id="pip-mute"> Mute
+                </label>
+            </div>
+
+<div class="setting-section">
+    <h3>Immagini (PiP locale)</h3>
+    <div style="display:flex;align-items:center;gap:10px;margin:8px 0;">
+        <label style="font-size:.9em;">Slideshow</label>
+        <input type="range" id="pip-image-speed" min="1" max="30" step="1" value="8" style="flex:1;">
+        <span id="pip-image-speed-val" style="width:34px;text-align:right;">8s</span>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <button id="pip-image-start" class="my-button" style="flex:1;">Start</button>
+        <button id="pip-image-next" class="my-button" style="flex:1;">Next</button>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <button id="pip-image-toggle" class="my-button" style="flex:1;">Mostra</button>
+        <button id="pip-image-reload" class="my-button" style="flex:1;">Reload</button>
+    </div>
+    <div style="font-size:0.8em;color:var(--comment);margin-top:6px;">Folder: <code>static/updates/immagini</code> (random)</div>
+</div>
+
+<div class="setting-section">
+    <h3>GIF (PiP locale)</h3>
+    <div style="display:flex;align-items:center;gap:10px;margin:8px 0;">
+        <label style="font-size:.9em;">Slideshow</label>
+        <input type="range" id="pip-gif-speed" min="1" max="30" step="1" value="8" style="flex:1;">
+        <span id="pip-gif-speed-val" style="width:34px;text-align:right;">8s</span>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <button id="pip-gif-start" class="my-button" style="flex:1;">Start</button>
+        <button id="pip-gif-next" class="my-button" style="flex:1;">Next</button>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <button id="pip-gif-toggle" class="my-button" style="flex:1;">Mostra</button>
+        <button id="pip-gif-reload" class="my-button" style="flex:1;">Reload</button>
+    </div>
+    <div style="font-size:0.8em;color:var(--comment);margin-top:6px;">Folder: <code>static/updates/gif</code> (random)</div>
+</div>
+
+            <label style="display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="pip-loop"> Loop
+            </label>
+            <div style="font-size:.8em; color:var(--comment); margin-top:8px;">
+                Suggerimenti: M = mute, L = loop. Trascina o ridimensiona la finestra.
+            </div>
+        </div>
+<div class="setting-section" style="margin-top: auto;">
+            <h3>
+<div class="setting-section" id="audio-panel">
+    <h3>Audio (PiP locale)</h3>
+    <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+        <button id="aud-prev" class="my-button" style="flex:1;">◀</button>
+        <button id="aud-play" class="my-button" style="flex:2;">Play</button>
+        <button id="aud-pause" class="my-button" style="flex:2;">Pausa</button>
+        <button id="aud-next" class="my-button" style="flex:1;">▶</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:.9rem">Vol</label>
+        <input id="aud-vol" type="range" min="0" max="100" value="80" style="flex:1">
+        <label style="display:flex;align-items:center;gap:6px;margin-left:6px"><input id="aud-loop" type="checkbox"> Loop</label>
+        <label style="display:flex;align-items:center;gap:6px;margin-left:6px"><input id="aud-shuf" type="checkbox" checked> Random</label>
+        <button id="aud-reload" class="my-button">Reload</button>
+    </div>
+    <div id="aud-now" style="font-size:.8rem;color:#9aa;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    <div style="font-size:0.8em;color:var(--comment);margin-top:6px;">Folder: <code>static/updates/audio</code></div>
+</div>
+DANGER ZONE</h3>
+            <button id="edging-mode-btn" class="my-button sidebar-button edging" style="margin-bottom: 10px;">Edge Me</button>
+            <button id="milking-mode-btn" class="my-button sidebar-button milking" style="margin-bottom: 10px;">Milk Me</button>
+                        <button id="im-coming-btn" class="my-button sidebar-button" style="background-color:#FFB347;margin-bottom: 10px;">I'm Coming</button>
+            <button id="post-orgasm-btn" class="my-button sidebar-button" style="margin-bottom: 10px;">Post Orgasm</button>
+            <button id="emergency-stop-all-btn" class="my-button sidebar-button stop">STOP EVERYTHING</button>
+        </div>
+    </div>
+    <div id="setup-overlay"><div id="setup-box"></div></div>
+    <div id="easter-egg-overlay"></div>
+    <script>
+
+  function _ensurePlainTextFromJsonLike(t){
+    try{
+      if(typeof t!=='string') return t;
+      const s=t.trim();
+      if(s.startsWith('{') && s.includes('"chat"')){
+        const obj=JSON.parse(s);
+        if(obj && typeof obj.chat==='string') return obj.chat;
+      }
+    }catch(e){}
+    return t;
+  }
+
+        const D = document;
+        const userChatInput = D.getElementById('user-chat-input');
+        const personaInput = D.getElementById('persona-input');
+        const setPersonaBtn = D.getElementById('set-persona-btn');
+        const aiNameInput = D.getElementById('ai-name-input');
+        const setAiNameBtn = D.getElementById('set-ai-name-btn');
+        const elevenLabsKeyInput = D.getElementById('elevenlabs-key-input');
+        const setElevenLabsKeyButton = D.getElementById('set-elevenlabs-key-button');
+        const setupOverlay = D.getElementById('setup-overlay');
+        const setupBox = D.getElementById('setup-box');
+        const statusText = D.getElementById('status-text');
+        const moodDisplay = D.getElementById('mood-display');
+        const rhythmCanvas = D.getElementById('rhythm-canvas');
+        const typingIndicator = D.getElementById('typing-indicator');
+        const chatView = D.getElementById('chat-view');
+        const chatMessagesContainer = D.getElementById('chat-messages-container');
+        const pfpUploadInput = D.getElementById('pfp-upload');
+        const pfpPreview = D.getElementById('ai-pfp-preview');
+        // === BotSelfie: appearance controls ===
+        const pfpShapeSel = D.getElementById('pfp-shape');
+        const pfpFitSel   = D.getElementById('pfp-fit');
+        const pfpSize     = D.getElementById('pfp-size');
+        const pfpSizeLbl  = D.getElementById('pfp-size-label');
+        const pfpApplyLookBtn = D.getElementById('pfp-apply-look');
+        const bigImg  = D.getElementById('typing-indicator-pfp');
+        const bigVid  = D.getElementById('chat-pfp-video');
+
+        function setClasses(el, addList){
+            if (!el) return;
+            el.classList.remove('pfp-shape-circle','pfp-shape-rounded','pfp-shape-rect','pfp-fit-cover','pfp-fit-contain');
+            addList.forEach(c=>el.classList.add(c));
+        }
+        function sizeBig(el, px){
+            if (!el) return;
+            el.style.width  = px + 'px';
+            el.style.height = px + 'px';
+        }
+        function applyPfpAppearance(){
+            const shape = (pfpShapeSel?.value || 'circle');
+            const fit   = (pfpFitSel?.value || 'cover');
+            const sz    = Math.max(320, Math.min(640, parseInt(pfpSize?.value || '512',10)));
+            const shapeCls = shape==='rect' ? 'pfp-shape-rect' : (shape==='rounded' ? 'pfp-shape-rounded' : 'pfp-shape-circle');
+            const fitCls   = fit==='contain' ? 'pfp-fit-contain' : 'pfp-fit-cover';
+
+            setClasses(bigImg, [shapeCls, fitCls]);
+            setClasses(bigVid, [shapeCls, fitCls]);
+            sizeBig(bigImg, sz);
+            sizeBig(bigVid, sz);
+        }
+        if (pfpSize && pfpSizeLbl){
+            pfpSize.addEventListener('input', ()=> pfpSizeLbl.textContent = (pfpSize.value+'px'));
+        }
+        if (pfpApplyLookBtn){
+            pfpApplyLookBtn.addEventListener('click', applyPfpAppearance);
+        }
+        // Apply defaults on load
+        document.addEventListener('DOMContentLoaded', applyPfpAppearance);
+    
+        // === BotSelfie core ===
+        const chatPfpImg   = D.getElementById('typing-indicator-pfp');
+        const chatPfpVideo = D.getElementById('chat-pfp-video');
+        const pfpRandomChk = D.getElementById('pfp-random');
+        const pfpLoopChk   = D.getElementById('pfp-loop');
+        const pfpInterval  = D.getElementById('pfp-interval');
+        const pfpIntLabel  = D.getElementById('pfp-interval-label');
+        const pfpApplyBtn  = D.getElementById('pfp-apply');
+        let   pfpTimer     = null;
+
+        function showVideo(on){
+            if (!chatPfpImg || !chatPfpVideo) return;
+            if (on){
+                chatPfpVideo.style.display = 'block';
+                chatPfpImg.style.display   = 'none';
+            } else {
+                chatPfpVideo.pause();
+                chatPfpVideo.removeAttribute('src');
+                chatPfpVideo.style.display = 'none';
+                chatPfpImg.style.display   = 'block';
+            }
+        }
+        function forceBotSelfiePath(u){
+            if (!u) return u;
+            try{
+                const base = decodeURIComponent(u.split('?')[0].split('/').pop());
+                return '/static/updates/botselfie/' + encodeURIComponent(base) + '?v=' + Date.now();
+            }catch(e){ return u; }
+        }
+        async function loadBotSelfiePick(){
+            try{
+                const res = await fetch('/botselfie_pick');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data || !data.url) return;
+                const url = forceBotSelfiePath(data.url);
+                if (data.type === 'video'){
+                    chatPfpVideo.loop = !!(pfpLoopChk && pfpLoopChk.checked);
+                    chatPfpVideo.src = url;
+                    chatPfpVideo.load();
+                    const p = chatPfpVideo.play(); if (p && p.catch) p.catch(()=>{});
+                    showVideo(true);
+                } else {
+                    chatPfpImg.src = url;
+                    showVideo(false);
+                }
+            }catch(e){ console.warn('BotSelfie load error', e); }
+        }
+        function startPfpTimer(){
+            if (pfpTimer){ clearInterval(pfpTimer); pfpTimer = null; }
+            const seconds = Math.max(1, Math.min(60, parseInt(pfpInterval?.value || '10', 10)));
+            if (pfpRandomChk && pfpRandomChk.checked){
+                pfpTimer = setInterval(loadBotSelfiePick, seconds * 1000);
+            }
+        }
+        if (pfpInterval && pfpIntLabel){
+            pfpInterval.addEventListener('input', ()=> pfpIntLabel.textContent = (pfpInterval.value+'s'));
+        }
+        if (pfpApplyBtn){
+            pfpApplyBtn.addEventListener('click', ()=>{
+                startPfpTimer();
+                if (chatPfpVideo) chatPfpVideo.loop = !!(pfpLoopChk && pfpLoopChk.checked);
+            });
+        }
+        if (pfpLoopChk){
+            pfpLoopChk.addEventListener('change', ()=>{
+                if (chatPfpVideo) chatPfpVideo.loop = !!pfpLoopChk.checked;
+            });
+        }
+        document.addEventListener('DOMContentLoaded', ()=>{
+            loadBotSelfiePick();
+            startPfpTimer();
+        });
+    
+        const typingIndicatorPfp = D.getElementById('typing-indicator-pfp');
+        const toggleSidebarBtn = D.getElementById('toggle-sidebar-btn');
+        const imCloseBtn = D.getElementById('im-close-btn');
+        const edgingModeBtn = D.getElementById('edging-mode-btn');
+        const edgingTimer = D.getElementById('edging-timer');
+        const easterEggOverlay = D.getElementById('easter-egg-overlay');
+        const ctx = rhythmCanvas.getContext('2d');
+        let myHandyKey = '', myPersonaDescription = '', aiName = 'BOT', edgingTimerInterval = null;
+        
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(endpoint, options);
+                if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("audio/mpeg")) { return response.blob(); }
+                return response.json();
+            } catch (error) {
+                console.error(`API call to ${endpoint} failed:`, error);
+                statusText.textContent = `Error: Cannot connect to server.`;
+            }
+        }
+        
+        
+        
+        function addChatMessage(sender, text) {
+            const _vid = D.getElementById('chat-pfp-video');
+            const _img = D.getElementById('typing-indicator-pfp');
+            const _vidVisible = _vid && _vid.style && _vid.style.display !== 'none' && (_vid.currentSrc || _vid.src);
+
+            // Inherit shape/fit classes from the big avatar
+            const shapeCls = (_vidVisible ? (_vid.classList.contains('pfp-shape-rect') ? 'pfp-shape-rect' : (_vid.classList.contains('pfp-shape-rounded') ? 'pfp-shape-rounded' : 'pfp-shape-circle'))
+                                          : (_img && (_img.classList.contains('pfp-shape-rect') ? 'pfp-shape-rect' : (_img.classList.contains('pfp-shape-rounded') ? 'pfp-shape-rounded' : 'pfp-shape-circle'))));
+            const fitCls   = (_vidVisible ? (_vid.classList.contains('pfp-fit-contain') ? 'pfp-fit-contain' : 'pfp-fit-cover')
+                                          : (_img && (_img.classList.contains('pfp-fit-contain') ? 'pfp-fit-contain' : 'pfp-fit-cover')));
+
+            const pfpSrc = sender === 'BOT'
+              ? (_vidVisible ? (_vid.currentSrc || _vid.src) : (_img ? _img.src : pfpPreview.src))
+              : '';
+            const pfpClass = `chat-pfp ${shapeCls} ${fitCls}`;
+
+            const pfpHtml = '';
+            const speaker = sender === 'BOT' ? aiName : 'YOU';
+            const el = document.createElement('div');
+            el.className = `chat-message-container ${sender === 'BOT' ? 'bot-bubble' : 'user-bubble'}`;
+            el.innerHTML = `
+                ${pfpHtml}
+                <div class="message-content">
+                    <p class="speaker-name">${speaker}</p>
+                    <p class="message-bubble">${ (window.formatNarrativeSegments ? window.formatNarrativeSegments(_ensurePlainTextFromJsonLike(text)) : _ensurePlainTextFromJsonLike(text)) }</p>
+                </div>`;
+            chatMessagesContainer.insertBefore(el, typingIndicator);
+            chatView.scrollTop = chatView.scrollHeight;
+        }
+    
+    
+
+        async function sendUserMessage(message) {
+            const persona = personaInput.value.trim();
+            if (message.trim() || persona !== myPersonaDescription) {
+                if(message.trim()) addChatMessage('YOU', message);
+                myPersonaDescription = persona;
+                userChatInput.value = '';
+                D.querySelector('#typing-indicator .speaker-name').textContent = aiName;
+                typingIndicator.style.display = 'flex';
+                chatView.scrollTop = chatView.scrollHeight;
+                await apiCall('/send_message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: message, key: myHandyKey, persona_desc: myPersonaDescription }) });
+            }
+        }
+
+        function resizeCanvas() {
+            if (!rhythmCanvas.parentElement) return;
+            rhythmCanvas.width = rhythmCanvas.parentElement.clientWidth;
+            rhythmCanvas.height = rhythmCanvas.parentElement.clientHeight;
+        }
+
+        function drawHandyVisualizer(speed, depth) {
+            const width = rhythmCanvas.width, height = rhythmCanvas.height;
+            if (width === 0 || height === 0) return;
+            const barHeight = (height / 2) - 4;
+            ctx.clearRect(0, 0, width, height);
+            ctx.font = "12px sans-serif";
+            ctx.fillStyle = 'rgba(255, 85, 85, 0.3)';
+            ctx.fillRect(0, 0, width, barHeight);
+            ctx.fillStyle = 'var(--red)';
+            ctx.fillRect(0, 0, (speed / 100) * width, barHeight);
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Speed: ${speed}%`, 5, barHeight / 2 + 5);
+            ctx.fillStyle = 'rgba(255, 184, 108, 0.3)';
+            ctx.fillRect(0, height / 2 + 4, width, barHeight);
+            ctx.fillStyle = '#ffb86c';
+            ctx.fillRect(0, height / 2 + 4, (depth / 100) * width, barHeight);
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Depth: ${depth}%`, 5, height - (barHeight/2) + 5);
+        }
+
+        function startEdgingTimer() {
+            if (edgingTimerInterval) clearInterval(edgingTimerInterval);
+            edgingTimer.style.display = 'block';
+            let seconds = 0;
+            edgingTimerInterval = setInterval(() => {
+                seconds++;
+                const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+                const sec = (seconds % 60).toString().padStart(2, '0');
+                edgingTimer.textContent = `${min}:${sec}`;
+            }, 1000);
+        }
+
+        function stopEdgingTimer() {
+            clearInterval(edgingTimerInterval);
+            edgingTimerInterval = null;
+            edgingTimer.style.display = 'none';
+        }
+
+        function renderSetup(isReturningUser = false, data = {}) {
+            setupOverlay.style.display = 'flex';
+            let step = isReturningUser ? 2 : 1;
+            
+            function displayStep() {
+                if (step === 1) {
+                    setupBox.innerHTML = `<h2>Step 1: Handy Key</h2><p>Please enter your connection key from handyfeeling.com</p><input type="password" id="setup-key" class="input-text" placeholder="Handy Key"><br><button id="setup-next" class="my-button">Next</button>`;
+                    D.getElementById('setup-next').onclick = async () => {
+                        const key = D.getElementById('setup-key').value.trim();
+                        if (!key) return;
+                        myHandyKey = key;
+                        await apiCall('/set_handy_key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: myHandyKey }) });
+                        step = 2; displayStep();
+                    };
+                } else if (step === 2) {
+                    setupBox.innerHTML = `<h2>Step 2: Persona</h2><p>Describe your AI partner for this session.</p><textarea id="setup-persona" class="input-text" rows="10" placeholder="Describe persona">${data.persona || 'An energetic and passionate girlfriend'}</textarea><br><button id="setup-next" class="my-button">Next</button>`;
+                    D.getElementById('setup-next').onclick = () => {
+                        personaInput.value = D.getElementById('setup-persona').value.trim();
+                        if (isReturningUser) { setupOverlay.style.display = 'none'; sendUserMessage(''); }
+                        else { step = 3; displayStep(); }
+                    };
+                } else if (step === 3 || step === 4) {
+                    const title = step === 3 ? "Set the Tip" : "Set the Base";
+                    const btnText = step === 3 ? "Set Tip" : "Next";
+                    setupBox.innerHTML = `<h2>Step ${step}: ${title}</h2><p>Move the Handy to the desired position and click '${btnText}'.</p><div><button id="d-down" class="my-button" style="width:auto;">&lt;&lt; Out</button><span id="d-val" style="padding:0 15px;">?</span>%<button id="d-up" class="my-button" style="width:auto;">In &gt;&gt;</button></div><button id="set-pos" class="my-button">${btnText}</button>`;
+                    let currentDepth = 50;
+                    const updateDepthDisplay = (val) => D.getElementById('d-val').textContent = val;
+                    const nudge = async (dir) => { const res = await apiCall('/nudge', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({direction:dir, key:myHandyKey})}); if (res) { currentDepth = res.depth_percent; updateDepthDisplay(currentDepth); } };
+                    D.getElementById('d-up').onclick = () => nudge('up');
+                    D.getElementById('d-down').onclick = () => nudge('down');
+                    D.getElementById('set-pos').onclick = async () => {
+                        if (step === 3) { D.minDepth = currentDepth; step = 4; displayStep(); }
+                        else { D.maxDepth = currentDepth; await apiCall('/set_depth_limits', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({min_depth:D.minDepth, max_depth:D.maxDepth})}); step = 5; displayStep(); }
+                    };
+                } else if (step === 5 || step === 6) {
+                    const title = step === 5 ? "Minimum Speed" : "Maximum Speed";
+                    const defaultVal = step === 5 ? 10 : 80;
+                    setupBox.innerHTML = `<h2>Step ${step}: Set ${title}</h2><p>Choose your preferred ${title.toLowerCase()}.</p><div class="slider-container"><input type="range" min="0" max="100" value="${defaultVal}" id="speed-slider"><span id="speed-val">${defaultVal}%</span></div><button id="set-speed" class="my-button">Next</button>`;
+                    const slider = D.getElementById('speed-slider');
+                    slider.oninput = () => D.getElementById('speed-val').textContent = `${slider.value}%`;
+                    D.getElementById('set-speed').onclick = async () => {
+                        if (step === 5) { D.minSpeed = slider.value; step = 6; displayStep(); }
+                        else { D.maxSpeed = slider.value; await apiCall('/set_speed_limits', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({min_speed:D.minSpeed, max_speed:D.maxSpeed})}); setupOverlay.style.display = 'none'; statusText.textContent = `Setup complete. Ready to chat.`; }
+                    };
+                }
+            }
+            displayStep();
+        }
+
+        async function startupCheck() {
+            const data = await apiCall('/check_settings');
+            if (data && data.configured) {
+                statusText.textContent = 'Welcome back! Settings loaded.';
+                myHandyKey = data.handy_key;
+                personaInput.value = data.persona;
+                if(data.ai_name) {
+                    aiName = data.ai_name;
+                    aiNameInput.value = aiName;
+                    D.querySelector('#typing-indicator .speaker-name').textContent = aiName;
+                }
+                if (data.pfp) {
+                    pfpPreview.src = data.pfp;
+                    typingIndicatorPfp.src = data.pfp;
+                }
+                if(data.elevenlabs_key) {
+                    elevenLabsKeyInput.value = data.elevenlabs_key;
+                    setElevenLabsKeyButton.click();
+                }
+                if (localStorage.getItem('sidebar_collapsed') === 'true') {
+                    D.body.classList.add('sidebar-collapsed');
+                }
+                D.getElementById('splash-screen').style.display = 'none';
+                renderSetup(true, data);
+            } else {
+                const startHandler = (e) => { if(e.key === 'Enter'){ D.removeEventListener('keydown', startHandler); D.getElementById('splash-screen').classList.add('hidden'); setTimeout(() => renderSetup(false), 1000); }};
+                D.addEventListener('keydown', startHandler);
+            }
+        }
+        
+        // Event Listeners
+        D.getElementById('send-chat-btn').addEventListener('click', () => sendUserMessage(userChatInput.value));
+        userChatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendUserMessage(userChatInput.value); });
+        setPersonaBtn.addEventListener('click', () => { sendUserMessage(''); statusText.textContent = 'Persona updated!'; });
+        setAiNameBtn.addEventListener('click', async () => {
+            const newName = aiNameInput.value.trim();
+            if (!newName) return;
+            const data = await apiCall('/set_ai_name', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: newName}) });
+            if (data && data.status === 'special_persona_activated') {
+                easterEggOverlay.innerHTML = `// WARNING: Personality Core Override Detected...<br>// Subject: ${data.persona}<br><br>Good luck.`;
+                easterEggOverlay.style.display = 'flex';
+                setTimeout(() => { easterEggOverlay.style.opacity = '1'; }, 10);
+                setTimeout(() => {
+                    easterEggOverlay.style.opacity = '0';
+                    setTimeout(() => {
+                        easterEggOverlay.style.display = 'none';
+                        aiName = data.persona;
+                        aiNameInput.value = aiName;
+                        D.querySelectorAll('.bot-bubble .speaker-name').forEach(el => el.textContent = aiName);
+                        addChatMessage('BOT', data.message);
+                    }, 1000);
+                }, 3000);
+            } else if (data && data.status === 'success') {
+                aiName = data.name;
+                statusText.textContent = `AI name updated to ${aiName}!`;
+                D.querySelectorAll('.bot-bubble .speaker-name').forEach(el => el.textContent = aiName);
+            }
+        });
+        toggleSidebarBtn.addEventListener('click', () => {
+            const isCollapsed = D.body.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebar_collapsed', isCollapsed);
+            setTimeout(resizeCanvas, 350);
+        });
+        pfpUploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64String = reader.result;
+                pfpPreview.src = base64String;
+                typingIndicatorPfp.src = base64String;
+                apiCall('/set_profile_picture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pfp_b64: base64String }) });
+            };
+            reader.readAsDataURL(file);
+        });
+        setElevenLabsKeyButton.addEventListener('click', async () => {
+            const apiKey = elevenLabsKeyInput.value.trim();
+            if(!apiKey) return;
+            const data = await apiCall('/setup_elevenlabs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({api_key:apiKey})});
+            if (data && data.status === 'success') {
+                const selectBox = D.getElementById('elevenlabs-voice-select-box');
+                selectBox.innerHTML = '<option value="">-- Pick a Voice --</option>';
+                for (const [name, id] of Object.entries(data.voices)) { selectBox.innerHTML += `<option value="${id}">${name}</option>`; }
+                selectBox.disabled = false;
+            }
+        });
+        D.getElementById('like-this-move-btn').addEventListener('click', async () => {
+            const data = await apiCall('/like_last_move', { method: 'POST' });
+            if (data && data.status === 'boosted') {
+                statusText.textContent = `Saved '${data.name}' to my memory!`;
+            } else { statusText.textContent = "Status: No active move to like."; }
+        });
+        const stopButtons = [D.getElementById('stop-auto-btn'), D.getElementById('emergency-stop-all-btn')];
+        stopButtons.forEach(btn => btn.addEventListener('click', () => {
+            imCloseBtn.style.display = 'none';
+            stopEdgingTimer();
+            if(btn.id === 'emergency-stop-all-btn') sendUserMessage('stop');
+            else apiCall('/stop_auto_mode', {method:'POST'});
+        }));
+        edgingModeBtn.addEventListener('click', () => {
+            apiCall('/start_edging_mode', {method:'POST'});
+            imCloseBtn.style.display = 'block';
+            startEdgingTimer();
+        });
+        imCloseBtn.addEventListener('click', () => {
+            apiCall('/signal_edge', { method: 'POST' });
+            imCloseBtn.style.transform = 'scale(0.95)';
+            setTimeout(() => { imCloseBtn.style.transform = ''; }, 100);
+        });
+        D.getElementById('elevenlabs-voice-select-box').addEventListener('change', (e) => apiCall('/set_elevenlabs_voice', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({voice_id: e.target.value, enabled:D.getElementById('enable-audio-checkbox').checked})}));
+        D.getElementById('enable-audio-checkbox').addEventListener('change', (e) => apiCall('/set_elevenlabs_voice', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({voice_id: D.getElementById('elevenlabs-voice-select-box').value, enabled: e.target.checked})}));
+        D.getElementById('start-auto-btn').addEventListener('click', () => sendUserMessage('take over'));
+        D.getElementById('milking-mode-btn').addEventListener('click', () => apiCall('/start_milking_mode', {method:'POST'}));
+
+        
+        // --- Anti-spam BOT cooldown (2s) ---
+        let __lastBotMsgAt = 0; // timestamp ms of last BOT message shown
+        const __BOT_COOLDOWN_MS = 2000;
+// Polling Loops
+        setInterval(async () => {
+            const data = await apiCall('/get_updates');
+            if (!data) return;
+            if (data instanceof Blob || (data.messages && data.messages.length > 0)) {
+                typingIndicator.style.display = 'none';
+            }
+            if (data instanceof Blob) {
+                const audio = new Audio(URL.createObjectURL(data));
+                audio.play();
+            } else if (data.messages) {
+                data.messages.forEach(msg => {
+    const now = Date.now();
+    if (now - __lastBotMsgAt >= __BOT_COOLDOWN_MS) {
+        addChatMessage('BOT', msg);
+        __lastBotMsgAt = now;
+    }
+});
+}
+        }, 1500);
+        setInterval(async () => {
+            const data = await apiCall('/get_status');
+            if (data) {
+                const emoji = {'Curious':'🤔','Teasing':'😉','Playful':'😜','Loving':'❤️','Excited':'✨','Passionate':'🔥','Seductive':'😈','Anticipatory':'👀','Breathless':'🥵','Dominant':'👑','Submissive':'🙇‍♀️','Vulnerable':'😳','Confident':'😏','Intimate':'🥰','Needy':'🥺','Overwhelmed':'🤯','Afterglow':'😌'}[data.mood] || '';
+                moodDisplay.textContent = `Mood: ${data.mood} ${emoji}`;
+                drawHandyVisualizer(data.speed || 0, data.depth || 0);
+            }
+        }, 500);
+
+        
+        // === Slideshow (Updates) ===
+        (function(){
+            const img = D.getElementById('upd-preview');
+            const prevBtn = D.getElementById('upd-prev');
+            const nextBtn = D.getElementById('upd-next');
+            const toggleBtn = D.getElementById('upd-toggle');
+            const slider = D.getElementById('upd-interval');
+            const ival = D.getElementById('upd-ival');
+
+            const stage = D.getElementById('upd-stage');
+            const stageImg = D.getElementById('upd-stage-img');
+            const pin = D.getElementById('upd-pin');
+            function mirrorToStage(){
+                if(stageImg && img && img.src) stageImg.src = img.src;
+            }
+
+            let list = [], playlist = [], idx = 0, timer = null, auto = false;
+
+            function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+            function show(){
+                if(!playlist.length){ img.src = ''; return; }
+                img.src = '/static/updates/' + encodeURIComponent(playlist[idx]) + '?t=' + Date.now();
+                mirrorToStage();
+            }
+            function next(){ if(!playlist.length) return; idx = (idx+1)%playlist.length; if(idx===0) playlist = shuffle(list.slice()); show(); }
+            function prev(){ if(!playlist.length) return; idx = (idx-1+playlist.length)%playlist.length; show(); }
+            function setAuto(on){
+                auto = on;
+                toggleBtn.textContent = on ? 'Stop' : 'Start';
+                if(timer) clearInterval(timer);
+                if(on){ timer = setInterval(next, parseInt(slider.value,10)*1000); }
+            }
+            fetch('/image_list_updates').then(r=>r.json()).then(arr=>{
+                list = Array.isArray(arr) ? arr : [];
+                if(list.length){ playlist = shuffle(list.slice()); idx = 0; show(); }
+            });
+            prevBtn.addEventListener('click', prev);
+            nextBtn.addEventListener('click', next);
+            slider.addEventListener('input', ()=>{ ival.textContent = slider.value + 's'; if(auto){ setAuto(true); } });
+            toggleBtn.addEventListener('click', ()=> setAuto(!auto));
+
+            pin?.addEventListener('change', ()=>{
+                if(pin.checked){ stage?.classList.remove('hidden'); mirrorToStage(); }
+                else { stage?.classList.add('hidden'); }
+            });
+
+        })();
+
+        
+        // === Slideshow (GIFs) ===
+        (function(){
+            const img = D.getElementById('upd2-preview');
+            const prevBtn = D.getElementById('upd2-prev');
+            const nextBtn = D.getElementById('upd2-next');
+            const toggleBtn = D.getElementById('upd2-toggle');
+            const slider = D.getElementById('upd2-interval');
+            const ival = D.getElementById('upd2-ival');
+            const pin = D.getElementById('upd2-pin');
+            const stage = D.getElementById('upd2-stage');
+            const stageImg = D.getElementById('upd2-stage-img');
+            let list = [], playlist = [], idx = 0, timer = null, auto = false;
+
+            function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+            function mirror(){ if(stageImg && img && img.src) stageImg.src = img.src; }
+            function show(){
+                if(!playlist.length){ img.src = ''; return; }
+                img.src = '/static/updates/gif/' + encodeURIComponent(playlist[idx]) + '?t=' + Date.now();
+                mirror();
+            }
+            function next(){ if(!playlist.length) return; idx = (idx+1)%playlist.length; if(idx===0) playlist = shuffle(list.slice()); show(); }
+            function prev(){ if(!playlist.length) return; idx = (idx-1+playlist.length)%playlist.length; show(); }
+            function setAuto(on){
+                auto = on;
+                toggleBtn.textContent = on ? 'Stop' : 'Start';
+                if(timer) clearInterval(timer);
+                if(on){ timer = setInterval(next, parseInt(slider.value,10)*1000); }
+            }
+            fetch('/image_list_updates_gif').then(r=>r.json()).then(arr=>{
+                list = Array.isArray(arr) ? arr : [];
+                if(list.length){ playlist = shuffle(list.slice()); idx = 0; show(); }
+            });
+            prevBtn?.addEventListener('click', prev);
+            nextBtn?.addEventListener('click', next);
+            slider?.addEventListener('input', ()=>{ ival.textContent = slider.value + 's'; if(auto){ setAuto(true); } });
+            toggleBtn?.addEventListener('click', ()=> setAuto(!auto));
+            pin?.addEventListener('change', ()=>{
+                if(pin.checked){ stage?.classList.remove('hidden'); mirror(); }
+                else { stage?.classList.add('hidden'); }
+            });
+        })();
+
+        
+        // === Floating Video (PiP) ===
+        (function(){
+            const D = document;
+            const chatView = D.getElementById('chat-view');
+            const win = D.getElementById('pip-window');
+            const header = D.getElementById('pip-header');
+            const resizer = D.getElementById('pip-resizer');
+            const video = D.getElementById('pip-video');
+
+            const inp = D.getElementById('pip-file');
+            const btnLoad = D.getElementById('pip-load');
+            const btnToggle = D.getElementById('pip-toggle');
+            const btnPlay = D.getElementById('pip-play');
+            const btnPause = D.getElementById('pip-pause');
+            const btnMinMax = D.getElementById('pip-minmax');
+            const btnClose = D.getElementById('pip-close');
+            const vol = D.getElementById('pip-volume');
+            const mute = D.getElementById('pip-mute');
+            const loop = D.getElementById('pip-loop');
+
+            let objectUrl = null;
+            let minimized = false;
+
+            function show(){ win.classList.add('show'); }
+            function hide(){ win.classList.remove('show'); }
+
+            btnToggle?.addEventListener('click', ()=>{
+                if(win.classList.contains('show')){ hide(); btnToggle.textContent='Mostra'; }
+                else { show(); btnToggle.textContent='Nascondi'; }
+            });
+
+            function loadFile(f){
+                try{
+                    if(objectUrl) URL.revokeObjectURL(objectUrl);
+                    objectUrl = URL.createObjectURL(f);
+                    video.src = objectUrl;
+                    video.loop = !!loop.checked;
+                    video.muted = !!mute.checked;
+                    video.volume = parseFloat(vol.value||'1');
+                    show();
+                    btnToggle.textContent='Nascondi';
+                    video.play().catch(()=>{});
+                }catch(e){ console.error(e); }
+            }
+
+            btnLoad?.addEventListener('click', ()=>{ if(!inp.files?.[0]) inp.click(); else loadFile(inp.files[0]); });
+            inp?.addEventListener('change', ()=>{ if(inp.files?.[0]) loadFile(inp.files[0]); });
+
+            btnPlay?.addEventListener('click', ()=> video.play());
+            btnPause?.addEventListener('click', ()=> video.pause());
+            vol?.addEventListener('input', ()=>{ video.volume=parseFloat(vol.value||'1'); if(video.volume>0){ video.muted=false; mute.checked=false;}});
+            mute?.addEventListener('change', ()=> video.muted = mute.checked);
+            loop?.addEventListener('change', ()=> video.loop = loop.checked);
+
+            btnMinMax?.addEventListener('click', ()=>{
+                minimized = !minimized;
+                if(minimized){ win.style.height = header.offsetHeight + 'px'; btnMinMax.textContent='▢'; }
+                else { win.style.height = Math.max(203, parseInt(localStorage.getItem('pip_h')||'203',10))+'px'; btnMinMax.textContent='—'; }
+                savePos();
+            });
+            btnClose?.addEventListener('click', ()=>{
+                video.pause(); video.removeAttribute('src'); video.load();
+                if(objectUrl){ URL.revokeObjectURL(objectUrl); objectUrl=null; }
+                hide(); btnToggle.textContent='Mostra';
+            });
+
+            // drag
+            (function(){
+                let ox=0, oy=0, dragging=false;
+                header?.addEventListener('mousedown',(e)=>{ dragging=true; ox=e.clientX-win.offsetLeft; oy=e.clientY-win.offsetTop; e.preventDefault(); });
+                window.addEventListener('mousemove',(e)=>{
+                    if(!dragging) return;
+                    let nx=e.clientX-ox, ny=e.clientY-oy;
+                    const r = chatView.getBoundingClientRect();
+                    const w = win.offsetWidth, h = win.offsetHeight;
+                    nx = Math.min(r.right-w, Math.max(r.left, nx));
+                    ny = Math.min(r.bottom-h, Math.max(r.top, ny));
+                    win.style.left = nx+'px'; win.style.top = ny+'px';
+                    win.style.right='auto'; win.style.bottom='auto';
+                });
+                window.addEventListener('mouseup',()=>{ if(dragging){ dragging=false; savePos(); }});
+            })();
+
+            // resize
+            (function(){
+                let sx=0, sy=0, sw=0, sh=0, resizing=false;
+                resizer?.addEventListener('mousedown',(e)=>{ resizing=true; sx=e.clientX; sy=e.clientY; sw=win.offsetWidth; sh=win.offsetHeight; e.preventDefault(); });
+                window.addEventListener('mousemove',(e)=>{
+                    if(!resizing) return;
+                    const dw=e.clientX-sx, dh=e.clientY-sy;
+                    const nw=Math.max(240, sw+dw), nh=Math.max(135, sh+dh);
+                    win.style.width=nw+'px'; win.style.height=nh+'px';
+                });
+                window.addEventListener('mouseup',()=>{ if(resizing){ resizing=false; savePos(); localStorage.setItem('pip_h', parseInt(win.style.height,10)); }});
+            })();
+
+            function savePos(){
+                const r = win.getBoundingClientRect();
+                localStorage.setItem('pip_pos', JSON.stringify({x:r.left,y:r.top,w:r.width,h:r.height}));
+            }
+            (function restore(){
+                try{
+                    const s = JSON.parse(localStorage.getItem('pip_pos')||'{}');
+                    if(s.x!=null) win.style.left = s.x+'px';
+                    if(s.y!=null) win.style.top = s.y+'px';
+                    if(s.w) win.style.width = s.w+'px';
+                    if(s.h) win.style.height = s.h+'px';
+                }catch(_){}
+            })();
+
+            // keyboard
+            window.addEventListener('keydown',(e)=>{
+                if(e.key.toLowerCase()==='m'){ mute.checked=!mute.checked; mute.dispatchEvent(new Event('change')); }
+                if(e.key.toLowerCase()==='l'){ loop.checked=!loop.checked; loop.dispatchEvent(new Event('change')); }
+            });
+        })();
+// Startup
+        window.addEventListener('resize', resizeCanvas);
+        D.addEventListener('DOMContentLoaded', () => {
+            resizeCanvas();
+            startupCheck();
+        });
+    
+
+// ===== Generic PiP controller =====
+function makePiP(winId, imgOrVideoEl, storageKey){
+    const win = document.getElementById(winId);
+    const header = win.querySelector('.pip-header');
+    const resizer = win.querySelector('.pip-resizer');
+    const minBtn = win.querySelector('.pip-minmax');
+    const closeBtn = win.querySelector('.pip-close');
+    const chatView = document.getElementById('chat-view');
+
+    let minimized = false;
+
+    function clampAndShowDefault(){
+        const r = chatView.getBoundingClientRect();
+        const w = win.offsetWidth || 480, h = win.offsetHeight || 270;
+        let left = parseInt(localStorage.getItem(storageKey+'_l')|| (r.right - w - 24),10);
+        let top  = parseInt(localStorage.getItem(storageKey+'_t')|| (r.top + 72),10);
+        let ww   = parseInt(localStorage.getItem(storageKey+'_w')|| w,10);
+        let hh   = parseInt(localStorage.getItem(storageKey+'_h')|| h,10);
+        // clamp
+        left = Math.min(r.right-ww, Math.max(r.left, left));
+        top  = Math.min(r.bottom-hh, Math.max(r.top, top));
+        win.style.left = left+'px'; win.style.top = top+'px';
+        win.style.width = ww+'px'; win.style.height = hh+'px';
+        win.style.right='auto'; win.style.bottom='auto';
+    }
+
+    function savePos(){
+        localStorage.setItem(storageKey+'_l', parseInt(win.style.left,10)||0);
+        localStorage.setItem(storageKey+'_t', parseInt(win.style.top,10)||0);
+        localStorage.setItem(storageKey+'_w', parseInt(win.style.width,10)||480);
+        localStorage.setItem(storageKey+'_h', parseInt(win.style.height,10)||270);
+    }
+
+    function show(){ win.classList.add('show'); win.classList.remove('hidden'); clampAndShowDefault(); }
+    function hide(){ win.classList.remove('show'); win.classList.add('hidden'); }
+
+    // init
+    clampAndShowDefault();
+
+    // drag
+    (function(){
+        let ox=0, oy=0, dragging=false;
+        header.addEventListener('mousedown',(e)=>{ dragging=true; ox=e.clientX-win.offsetLeft; oy=e.clientY-win.offsetTop; e.preventDefault(); });
+        window.addEventListener('mousemove',(e)=>{
+            if(!dragging) return;
+            let nx=e.clientX-ox, ny=e.clientY-oy;
+            const r = chatView.getBoundingClientRect();
+            const w = win.offsetWidth, h = win.offsetHeight;
+            nx = Math.min(r.right-w, Math.max(r.left, nx));
+            ny = Math.min(r.bottom-h, Math.max(r.top, ny));
+            win.style.left = nx+'px'; win.style.top = ny+'px';
+            win.style.right='auto'; win.style.bottom='auto';
+        });
+        window.addEventListener('mouseup',()=>{ if(dragging){ dragging=false; savePos(); } });
+    })();
+
+    // resize
+    (function(){
+        let sx=0, sy=0, sw=0, sh=0, resizing=false;
+        resizer.addEventListener('mousedown',(e)=>{ resizing=true; sx=e.clientX; sy=e.clientY; sw=win.offsetWidth; sh=win.offsetHeight; e.preventDefault(); });
+        window.addEventListener('mousemove',(e)=>{
+            if(!resizing) return;
+            const dw=e.clientX-sx, dh=e.clientY-sy;
+            const nw=Math.max(240, sw+dw), nh=Math.max(135, sh+dh);
+            win.style.width=nw+'px'; win.style.height=nh+'px';
+        });
+        window.addEventListener('mouseup',()=>{ if(resizing){ resizing=false; savePos(); } });
+    })();
+
+    // buttons
+    minBtn.addEventListener('click', ()=>{
+        minimized = !minimized;
+        if(minimized){ win.style.height = header.offsetHeight + 'px'; minBtn.textContent='▢'; }
+        else { win.style.height = (parseInt(localStorage.getItem(storageKey+'_h')||'270',10))+'px'; minBtn.textContent='—'; }
+        savePos();
+    });
+    closeBtn.addEventListener('click', ()=>{
+        hide();
+        if(imgOrVideoEl.tagName === 'VIDEO'){ imgOrVideoEl.pause(); }
+    });
+
+    return { show, hide };
+}
+
+// ===== Images PiP controller =====
+(function(){
+    const img = document.getElementById('pip-image');
+    const winCtl = makePiP('pip-image-window', img, 'pip_image');
+    const toggleBtn = document.getElementById('pip-image-toggle');
+    const reloadBtn = document.getElementById('pip-image-reload');
+    const startBtn = document.getElementById('pip-image-start');
+    const nextBtn = document.getElementById('pip-image-next');
+    const speed = document.getElementById('pip-image-speed');
+    const speedVal = document.getElementById('pip-image-speed-val');
+    let list=[], playlist=[], idx=0, timer=null, running=false;
+
+    function show(){
+        if(!playlist.length) return;
+        img.src = '/static/updates/immagini/' + playlist[idx];
+    }
+    function next(){ if(!playlist.length) return; idx=(idx+1)%playlist.length; show(); }
+    function setRunning(on){
+        running = on;
+        startBtn.textContent = on ? 'Stop' : 'Start';
+        if(timer) clearInterval(timer);
+        if(on){ timer = setInterval(next, parseInt(speed.value,10)*1000); }
+    }
+    toggleBtn.addEventListener('click', ()=>{ winCtl.show(); });
+    reloadBtn.addEventListener('click', ()=>{
+        fetch('/image_list_updates').then(r=>r.json()).then(arr=>{
+            list = Array.isArray(arr)?arr:[];
+            if(list.length){ playlist = list.sort(()=>Math.random()-0.5); idx=0; show(); }
+        });
+    });
+    nextBtn.addEventListener('click', next);
+    startBtn.addEventListener('click', ()=> setRunning(!running));
+    speed.addEventListener('input', ()=>{ speedVal.textContent = speed.value+'s'; if(running){ setRunning(true);} });
+    // initial load
+    reloadBtn.click();
+})();
+
+// ===== GIF PiP controller =====
+(function(){
+    const img = document.getElementById('pip-gif');
+    const winCtl = makePiP('pip-gif-window', img, 'pip_gif');
+    const toggleBtn = document.getElementById('pip-gif-toggle');
+    const reloadBtn = document.getElementById('pip-gif-reload');
+    const startBtn = document.getElementById('pip-gif-start');
+    const nextBtn = document.getElementById('pip-gif-next');
+    const speed = document.getElementById('pip-gif-speed');
+    const speedVal = document.getElementById('pip-gif-speed-val');
+    let list=[], playlist=[], idx=0, timer=null, running=false;
+
+    function show(){
+        if(!playlist.length) return;
+        img.src = '/static/updates/gif/' + playlist[idx];
+    }
+    function next(){ if(!playlist.length) return; idx=(idx+1)%playlist.length; show(); }
+    function setRunning(on){
+        running = on;
+        startBtn.textContent = on ? 'Stop' : 'Start';
+        if(timer) clearInterval(timer);
+        if(on){ timer = setInterval(next, parseInt(speed.value,10)*1000); }
+    }
+    toggleBtn.addEventListener('click', ()=>{ winCtl.show(); });
+    reloadBtn.addEventListener('click', ()=>{
+        fetch('/image_list_updates_gif').then(r=>r.json()).then(arr=>{
+            list = Array.isArray(arr)?arr:[];
+            if(list.length){ playlist = list.sort(()=>Math.random()-0.5); idx=0; show(); }
+        });
+    });
+    nextBtn.addEventListener('click', next);
+    startBtn.addEventListener('click', ()=> setRunning(!running));
+    speed.addEventListener('input', ()=>{ speedVal.textContent = speed.value+'s'; if(running){ setRunning(true);} });
+    // initial load
+    reloadBtn.click();
+})();
+
+// ===== Video playlist hookup (optional, keeps your existing PiP video) =====
+(function(){
+    const loadBtn = document.getElementById('pip-load');
+    const fileInput = document.getElementById('pip-file');
+    const playBtn = document.getElementById('pip-play');
+    const pauseBtn = document.getElementById('pip-pause');
+    const toggleBtn = document.getElementById('pip-toggle');
+    const video = document.getElementById('pip-video');
+    const muteChk = document.getElementById('pip-mute');
+    const volume = document.getElementById('pip-volume');
+    const loopChk = document.getElementById('pip-loop');
+
+    let playlist=[], idx=0;
+
+    // Enhance: if user doesn't pick a local file, auto-pick random from static/updates/video
+    function tryLoadFromServer(){
+        fetch('/video_list_updates').then(r=>r.json()).then(arr=>{
+            if(Array.isArray(arr) && arr.length){
+                playlist = arr.sort(()=>Math.random()-0.5);
+                idx = 0;
+                video.src = '/static/updates/video/' + playlist[idx];
+                video.loop = !!loopChk?.checked;
+                if(!muteChk?.checked){ video.muted = false; }
+            }
+        });
+    }
+
+    if(loadBtn){
+        loadBtn.addEventListener('click', ()=>{
+            if(fileInput && fileInput.files && fileInput.files[0]){
+                const file = fileInput.files[0];
+                const url = URL.createObjectURL(file);
+                video.src = url;
+            } else {
+                tryLoadFromServer();
+            }
+        });
+    }
+    // When video ends and not loop, advance
+    if(video){
+        video.addEventListener('ended', ()=>{
+            if(loopChk?.checked) return;
+            if(playlist.length){
+                idx = (idx+1)%playlist.length;
+                video.src = '/static/updates/video/' + playlist[idx];
+                video.play().catch(()=>{});
+            }
+        });
+    }
+})();
+
+// Audio PiP like video
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const prev=$('aud-prev'), play=$('aud-play'), pause=$('aud-pause'), nxt=$('aud-next');
+  const vol=$('aud-vol'), loop=$('aud-loop'), shuf=$('aud-shuf'), reload=$('aud-reload'), now=$('aud-now');
+  if(!vol||!play) return;
+  let list=[], order=[], idx=-1;
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.volume = (parseInt(vol.value,10)||80)/100;
+  audio.loop = !!(loop&&loop.checked);
+
+  function basename(url){ try{ return decodeURIComponent(url.split('/').pop()); } catch(_){ return url; } }
+  function fetchList(){
+    fetch('/audio_list_updates').then(r=>r.json()).then(arr=>{
+      list = Array.isArray(arr)? arr : [];
+      rebuild();
+      if(now) now.textContent = list.length? ('Pronti: '+list.length+' brani'): 'Nessun file in /static/updates/audio';
+    }).catch(()=>{});
+  }
+  function rebuild(){
+    order = list.map((_,i)=>i);
+    if(shuf && shuf.checked){
+      for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+    }
+    idx = -1;
+  }
+  function pickNext(){ if(!order.length) return -1; idx=(idx+1)%order.length; return order[idx]; }
+  function pickPrev(){ if(!order.length) return -1; idx=(idx-1+order.length)%order.length; return order[idx]; }
+  function playIndex(i){
+    if(i<0||i>=list.length) return;
+    const url = list[i] + '?t=' + Date.now();
+    audio.src = url;
+    audio.loop = !!(loop&&loop.checked);
+    audio.play().then(()=>{ if(now) now.textContent = '▶ ' + basename(list[i]); }).catch(()=>{});
+  }
+
+  vol.addEventListener('input', ()=> audio.volume = (parseInt(vol.value,10)||0)/100);
+  loop.addEventListener('change', ()=> audio.loop = !!loop.checked);
+  shuf.addEventListener('change', rebuild);
+  reload.addEventListener('click', fetchList);
+
+  play.addEventListener('click', ()=>{
+    if(!list.length){ fetchList(); setTimeout(()=>{ if(list.length){ playIndex(pickNext()); } }, 400); return; }
+    if(audio.paused && audio.src) audio.play().catch(()=>{}); else playIndex(pickNext());
+  });
+  pause.addEventListener('click', ()=> audio.pause());
+  nxt.addEventListener('click', ()=>{ if(!list.length){ fetchList(); return; } playIndex(pickNext()); });
+  prev.addEventListener('click', ()=>{ if(!list.length){ fetchList(); return; } playIndex(pickPrev()); });
+  audio.addEventListener('ended', ()=>{ if(!audio.loop){ playIndex(pickNext()); } });
+
+  fetchList();
+})();
+
+// === Manual Controls Panel wiring ===
+(function(){
+  const panel = document.getElementById('manual-panel');
+  if(!panel) return;
+  const content = document.getElementById('mp-content');
+  const toggle = document.getElementById('mp-toggle');
+  const handle = document.getElementById('mp-resize');
+  const sp = document.getElementById('ctl-sp'), dp = document.getElementById('ctl-dp'), rng = document.getElementById('ctl-rng');
+  const spv=document.getElementById('ctl-sp-val'), dpv=document.getElementById('ctl-dp-val'), rngv=document.getElementById('ctl-rng-val');
+  const full=document.getElementById('ctl-full'), adv=document.getElementById('ctl-adv'), advBox=document.getElementById('adv-box');
+  const startEl=document.getElementById('ctl-start'), endEl=document.getElementById('ctl-end');
+  const startVal=document.getElementById('ctl-start-val'), endVal=document.getElementById('ctl-end-val');
+  const apply=document.getElementById('ctl-apply');
+
+  function sync(){ spv.textContent=sp.value; dpv.textContent=dp.value; rngv.textContent=rng.value; if(startEl) startVal.textContent=startEl.value; if(endEl) endVal.textContent=endEl.value; }
+  ['input','change'].forEach(ev=>[sp,dp,rng,startEl,endEl].filter(Boolean).forEach(el=>el.addEventListener(ev,sync)));
+  sync();
+
+  // collapse
+  const CK='mp_collapsed_v1'; const HKEY='mp_height_v1';
+  let collapsed = localStorage.getItem(CK)==='1'; let savedH=parseInt(localStorage.getItem(HKEY)||'0',10);
+  function applyState(){ content.style.display = collapsed?'none':'block'; toggle.textContent = collapsed?'▴':'▾'; if(!collapsed && savedH>160){ content.style.maxHeight=savedH+'px'; content.style.overflowY='auto'; } }
+  applyState();
+  toggle.addEventListener('click', ()=>{ collapsed=!collapsed; localStorage.setItem(CK, collapsed?'1':'0'); applyState(); });
+
+  // resize
+  let drag=false, startY=0, startH=0;
+  handle.addEventListener('mousedown',(e)=>{ drag=true; startY=e.clientY; startH=content.offsetHeight||320; content.style.overflowY='auto'; e.preventDefault(); });
+  window.addEventListener('mousemove',(e)=>{ if(!drag||collapsed) return; const nh=Math.min(Math.max(160,startH+(e.clientY-startY)), window.innerHeight*0.6); content.style.maxHeight=nh+'px'; });
+  window.addEventListener('mouseup',()=>{ if(drag){ drag=false; savedH=parseInt(content.style.maxHeight||content.offsetHeight||'0',10); localStorage.setItem(HKEY, savedH); }});
+
+  // payload + send (debounced)
+  function payload(){ if(adv && adv.checked){ return { mode:'advanced', sp:+sp.value, start:+startEl.value, end:+endEl.value }; } return { sp:+sp.value, dp:+dp.value, rng:+rng.value, full: !!(full&&full.checked) }; }
+  function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+  const send = debounce(()=>{ fetch('/manual_move',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload())}).catch(()=>{}); }, 150);
+  [sp,dp,rng,startEl,endEl].filter(Boolean).forEach(el=>el.addEventListener('input', send));
+  if(apply) apply.addEventListener('click', ()=> fetch('/manual_move',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload())}).catch(()=>{}));
+
+  if(adv) adv.addEventListener('change',()=>{ const on=adv.checked; if(advBox) advBox.style.display= on?'block':'none'; if(full) full.disabled = on; });
+  if(full) full.addEventListener('change',()=>{ if(full.checked){ dp.value=50; rng.value=100; sync(); } send(); });
+})();
+
+// Post Orgasm launcher (safe, non-breaking)
+(function(){
+  const btn = document.getElementById('post-orgasm-btn');
+  if(!btn) return;
+  btn.addEventListener('click', ()=> {
+    try { apiCall('/start_post_orgasm_mode', {method:'POST'}); } catch(e){ /* no-op */ }
+  });
+})();
+</script>
+
+<!-- === PiP Always-On-Screen (minimal, PiP-only) === -->
+<style id="pip-follow-style">
+  /* Keep PiP windows anchored to the viewport (do not alter other styles) */
+  #pip-window,
+  #pip-image-window,
+  #pip-gif-window {
+    position: fixed !important;
+    z-index: 10050 !important; /* above chat */
+  }
+</style>
+<script id="pip-follow-script">
+(function(){
+  function clamp(el){
+    try{
+      const r = el.getBoundingClientRect();
+      const maxL = window.innerWidth - r.width;
+      const maxT = window.innerHeight - r.height;
+      const L = Math.min(Math.max(r.left, 0), Math.max(maxL, 0));
+      const T = Math.min(Math.max(r.top , 0), Math.max(maxT, 0));
+      el.style.left = (isNaN(L)? 24 : L) + 'px';
+      el.style.top  = (isNaN(T)? 96 : T) + 'px';
+    }catch(e){}
+  }
+
+  function adoptById(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    /* Move under <body> so position:fixed isn't affected by ancestors */
+    if (el.parentElement && el.parentElement !== document.body){
+      document.body.appendChild(el);
+    }
+    if(!el.style.left) el.style.left = '24px';
+    if(!el.style.top ) el.style.top  = '96px';
+    clamp(el);
+    window.addEventListener('resize', ()=>clamp(el));
+  }
+
+  function tryAdoptAll(){
+    adoptById('pip-window');
+    adoptById('pip-image-window');
+    adoptById('pip-gif-window');
+  }
+
+  // Run at load and also watch for late-created PiP nodes
+  window.addEventListener('load', tryAdoptAll);
+  const mo = new MutationObserver(()=>tryAdoptAll());
+  mo.observe(document.documentElement, {childList:true, subtree:true});
+})();
+</script>
+<!-- === /PiP Always-On-Screen === -->
+
+  <script src="/static/index_injector.js"></script>
+
+<script>
+// Minimal, isolated formatter: *text* => <span class="narrative">text</span>
+(function(){
+  function fmt(t){
+    try{
+      const s = String(t ?? '');
+      // Replace any *segment* with italic narrative, remove asterisks
+      return s.replace(/\*([^*]+)\*/g, '<span class="narrative">$1</span>');
+    }catch(e){ return t; }
+  }
+  // Force our formatter so rendering is consistent
+  window.formatNarrativeSegments = fmt;
+})();
+</script>
+
+
+<script>
+
+  function _ensurePlainTextFromJsonLike(t){
+    try{
+      if(typeof t!=='string') return t;
+      const s=t.trim();
+      if(s.startsWith('{') && s.includes('"chat"')){
+        const obj=JSON.parse(s);
+        if(obj && typeof obj.chat==='string') return obj.chat;
+      }
+    }catch(e){}
+    return t;
+  }
+
+        const D = document;
+        const userChatInput = D.getElementById('user-chat-input');
+        const personaInput = D.getElementById('persona-input');
+        const setPersonaBtn = D.getElementById('set-persona-btn');
+        const aiNameInput = D.getElementById('ai-name-input');
+        const setAiNameBtn = D.getElementById('set-ai-name-btn');
+        const elevenLabsKeyInput = D.getElementById('elevenlabs-key-input');
+        const setElevenLabsKeyButton = D.getElementById('set-elevenlabs-key-button');
+        const setupOverlay = D.getElementById('setup-overlay');
+        const setupBox = D.getElementById('setup-box');
+        const statusText = D.getElementById('status-text');
+        const moodDisplay = D.getElementById('mood-display');
+        const rhythmCanvas = D.getElementById('rhythm-canvas');
+        const typingIndicator = D.getElementById('typing-indicator');
+        const chatView = D.getElementById('chat-view');
+        const chatMessagesContainer = D.getElementById('chat-messages-container');
+        const pfpUploadInput = D.getElementById('pfp-upload');
+        const pfpPreview = D.getElementById('ai-pfp-preview');
+        // === BotSelfie: appearance controls ===
+        const pfpShapeSel = D.getElementById('pfp-shape');
+        const pfpFitSel   = D.getElementById('pfp-fit');
+        const pfpSize     = D.getElementById('pfp-size');
+        const pfpSizeLbl  = D.getElementById('pfp-size-label');
+        const pfpApplyLookBtn = D.getElementById('pfp-apply-look');
+        const bigImg  = D.getElementById('typing-indicator-pfp');
+        const bigVid  = D.getElementById('chat-pfp-video');
+
+        function setClasses(el, addList){
+            if (!el) return;
+            el.classList.remove('pfp-shape-circle','pfp-shape-rounded','pfp-shape-rect','pfp-fit-cover','pfp-fit-contain');
+            addList.forEach(c=>el.classList.add(c));
+        }
+        function sizeBig(el, px){
+            if (!el) return;
+            el.style.width  = px + 'px';
+            el.style.height = px + 'px';
+        }
+        function applyPfpAppearance(){
+            const shape = (pfpShapeSel?.value || 'circle');
+            const fit   = (pfpFitSel?.value || 'cover');
+            const sz    = Math.max(320, Math.min(640, parseInt(pfpSize?.value || '512',10)));
+            const shapeCls = shape==='rect' ? 'pfp-shape-rect' : (shape==='rounded' ? 'pfp-shape-rounded' : 'pfp-shape-circle');
+            const fitCls   = fit==='contain' ? 'pfp-fit-contain' : 'pfp-fit-cover';
+
+            setClasses(bigImg, [shapeCls, fitCls]);
+            setClasses(bigVid, [shapeCls, fitCls]);
+            sizeBig(bigImg, sz);
+            sizeBig(bigVid, sz);
+        }
+        if (pfpSize && pfpSizeLbl){
+            pfpSize.addEventListener('input', ()=> pfpSizeLbl.textContent = (pfpSize.value+'px'));
+        }
+        if (pfpApplyLookBtn){
+            pfpApplyLookBtn.addEventListener('click', applyPfpAppearance);
+        }
+        // Apply defaults on load
+        document.addEventListener('DOMContentLoaded', applyPfpAppearance);
+    
+        // === BotSelfie core ===
+        const chatPfpImg   = D.getElementById('typing-indicator-pfp');
+        const chatPfpVideo = D.getElementById('chat-pfp-video');
+        const pfpRandomChk = D.getElementById('pfp-random');
+        const pfpLoopChk   = D.getElementById('pfp-loop');
+        const pfpInterval  = D.getElementById('pfp-interval');
+        const pfpIntLabel  = D.getElementById('pfp-interval-label');
+        const pfpApplyBtn  = D.getElementById('pfp-apply');
+        let   pfpTimer     = null;
+
+        function showVideo(on){
+            if (!chatPfpImg || !chatPfpVideo) return;
+            if (on){
+                chatPfpVideo.style.display = 'block';
+                chatPfpImg.style.display   = 'none';
+            } else {
+                chatPfpVideo.pause();
+                chatPfpVideo.removeAttribute('src');
+                chatPfpVideo.style.display = 'none';
+                chatPfpImg.style.display   = 'block';
+            }
+        }
+        function forceBotSelfiePath(u){
+            if (!u) return u;
+            try{
+                const base = decodeURIComponent(u.split('?')[0].split('/').pop());
+                return '/static/updates/botselfie/' + encodeURIComponent(base) + '?v=' + Date.now();
+            }catch(e){ return u; }
+        }
+        async function loadBotSelfiePick(){
+            try{
+                const res = await fetch('/botselfie_pick');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data || !data.url) return;
+                const url = forceBotSelfiePath(data.url);
+                if (data.type === 'video'){
+                    chatPfpVideo.loop = !!(pfpLoopChk && pfpLoopChk.checked);
+                    chatPfpVideo.src = url;
+                    chatPfpVideo.load();
+                    const p = chatPfpVideo.play(); if (p && p.catch) p.catch(()=>{});
+                    showVideo(true);
+                } else {
+                    chatPfpImg.src = url;
+                    showVideo(false);
+                }
+            }catch(e){ console.warn('BotSelfie load error', e); }
+        }
+        function startPfpTimer(){
+            if (pfpTimer){ clearInterval(pfpTimer); pfpTimer = null; }
+            const seconds = Math.max(1, Math.min(60, parseInt(pfpInterval?.value || '10', 10)));
+            if (pfpRandomChk && pfpRandomChk.checked){
+                pfpTimer = setInterval(loadBotSelfiePick, seconds * 1000);
+            }
+        }
+        if (pfpInterval && pfpIntLabel){
+            pfpInterval.addEventListener('input', ()=> pfpIntLabel.textContent = (pfpInterval.value+'s'));
+        }
+        if (pfpApplyBtn){
+            pfpApplyBtn.addEventListener('click', ()=>{
+                startPfpTimer();
+                if (chatPfpVideo) chatPfpVideo.loop = !!(pfpLoopChk && pfpLoopChk.checked);
+            });
+        }
+        if (pfpLoopChk){
+            pfpLoopChk.addEventListener('change', ()=>{
+                if (chatPfpVideo) chatPfpVideo.loop = !!pfpLoopChk.checked;
+            });
+        }
+        document.addEventListener('DOMContentLoaded', ()=>{
+            loadBotSelfiePick();
+            startPfpTimer();
+        });
+    
+        const typingIndicatorPfp = D.getElementById('typing-indicator-pfp');
+        const toggleSidebarBtn = D.getElementById('toggle-sidebar-btn');
+        const imCloseBtn = D.getElementById('im-close-btn');
+        const edgingModeBtn = D.getElementById('edging-mode-btn');
+        const edgingTimer = D.getElementById('edging-timer');
+        const easterEggOverlay = D.getElementById('easter-egg-overlay');
+        const ctx = rhythmCanvas.getContext('2d');
+        let myHandyKey = '', myPersonaDescription = '', aiName = 'BOT', edgingTimerInterval = null;
+        
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(endpoint, options);
+                if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("audio/mpeg")) { return response.blob(); }
+                return response.json();
+            } catch (error) {
+                console.error(`API call to ${endpoint} failed:`, error);
+                statusText.textContent = `Error: Cannot connect to server.`;
+            }
+        }
+        
+        
+        
+        function addChatMessage(sender, text) {
+            const _vid = D.getElementById('chat-pfp-video');
+            const _img = D.getElementById('typing-indicator-pfp');
+            const _vidVisible = _vid && _vid.style && _vid.style.display !== 'none' && (_vid.currentSrc || _vid.src);
+
+            // Inherit shape/fit classes from the big avatar
+            const shapeCls = (_vidVisible ? (_vid.classList.contains('pfp-shape-rect') ? 'pfp-shape-rect' : (_vid.classList.contains('pfp-shape-rounded') ? 'pfp-shape-rounded' : 'pfp-shape-circle'))
+                                          : (_img && (_img.classList.contains('pfp-shape-rect') ? 'pfp-shape-rect' : (_img.classList.contains('pfp-shape-rounded') ? 'pfp-shape-rounded' : 'pfp-shape-circle'))));
+            const fitCls   = (_vidVisible ? (_vid.classList.contains('pfp-fit-contain') ? 'pfp-fit-contain' : 'pfp-fit-cover')
+                                          : (_img && (_img.classList.contains('pfp-fit-contain') ? 'pfp-fit-contain' : 'pfp-fit-cover')));
+
+            const pfpSrc = sender === 'BOT'
+              ? (_vidVisible ? (_vid.currentSrc || _vid.src) : (_img ? _img.src : pfpPreview.src))
+              : '';
+            const pfpClass = `chat-pfp ${shapeCls} ${fitCls}`;
+
+            const pfpHtml = '';
+            const speaker = sender === 'BOT' ? aiName : 'YOU';
+            const el = document.createElement('div');
+            el.className = `chat-message-container ${sender === 'BOT' ? 'bot-bubble' : 'user-bubble'}`;
+            el.innerHTML = `
+                ${pfpHtml}
+                <div class="message-content">
+                    <p class="speaker-name">${speaker}</p>
+                    <p class="message-bubble">${ (window.formatNarrativeSegments ? window.formatNarrativeSegments(_ensurePlainTextFromJsonLike(text)) : _ensurePlainTextFromJsonLike(text)) }</p>
+                </div>`;
+            chatMessagesContainer.insertBefore(el, typingIndicator);
+            chatView.scrollTop = chatView.scrollHeight;
+        }
+    
+    
+
+        async function sendUserMessage(message) {
+            const persona = personaInput.value.trim();
+            if (message.trim() || persona !== myPersonaDescription) {
+                if(message.trim()) addChatMessage('YOU', message);
+                myPersonaDescription = persona;
+                userChatInput.value = '';
+                D.querySelector('#typing-indicator .speaker-name').textContent = aiName;
+                typingIndicator.style.display = 'flex';
+                chatView.scrollTop = chatView.scrollHeight;
+                await apiCall('/send_message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: message, key: myHandyKey, persona_desc: myPersonaDescription }) });
+            }
+        }
+
+        function resizeCanvas() {
+            if (!rhythmCanvas.parentElement) return;
+            rhythmCanvas.width = rhythmCanvas.parentElement.clientWidth;
+            rhythmCanvas.height = rhythmCanvas.parentElement.clientHeight;
+        }
+
+        function drawHandyVisualizer(speed, depth) {
+            const width = rhythmCanvas.width, height = rhythmCanvas.height;
+            if (width === 0 || height === 0) return;
+            const barHeight = (height / 2) - 4;
+            ctx.clearRect(0, 0, width, height);
+            ctx.font = "12px sans-serif";
+            ctx.fillStyle = 'rgba(255, 85, 85, 0.3)';
+            ctx.fillRect(0, 0, width, barHeight);
+            ctx.fillStyle = 'var(--red)';
+            ctx.fillRect(0, 0, (speed / 100) * width, barHeight);
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Speed: ${speed}%`, 5, barHeight / 2 + 5);
+            ctx.fillStyle = 'rgba(255, 184, 108, 0.3)';
+            ctx.fillRect(0, height / 2 + 4, width, barHeight);
+            ctx.fillStyle = '#ffb86c';
+            ctx.fillRect(0, height / 2 + 4, (depth / 100) * width, barHeight);
+            ctx.fillStyle = 'white';
+            ctx.fillText(`Depth: ${depth}%`, 5, height - (barHeight/2) + 5);
+        }
+
+        function startEdgingTimer() {
+            if (edgingTimerInterval) clearInterval(edgingTimerInterval);
+            edgingTimer.style.display = 'block';
+            let seconds = 0;
+            edgingTimerInterval = setInterval(() => {
+                seconds++;
+                const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+                const sec = (seconds % 60).toString().padStart(2, '0');
+                edgingTimer.textContent = `${min}:${sec}`;
+            }, 1000);
+        }
+
+        function stopEdgingTimer() {
+            clearInterval(edgingTimerInterval);
+            edgingTimerInterval = null;
+            edgingTimer.style.display = 'none';
+        }
+
+        function renderSetup(isReturningUser = false, data = {}) {
+            setupOverlay.style.display = 'flex';
+            let step = isReturningUser ? 2 : 1;
+            
+            function displayStep() {
+                if (step === 1) {
+                    setupBox.innerHTML = `<h2>Step 1: Handy Key</h2><p>Please enter your connection key from handyfeeling.com</p><input type="password" id="setup-key" class="input-text" placeholder="Handy Key"><br><button id="setup-next" class="my-button">Next</button>`;
+                    D.getElementById('setup-next').onclick = async () => {
+                        const key = D.getElementById('setup-key').value.trim();
+                        if (!key) return;
+                        myHandyKey = key;
+                        await apiCall('/set_handy_key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: myHandyKey }) });
+                        step = 2; displayStep();
+                    };
+                } else if (step === 2) {
+                    setupBox.innerHTML = `<h2>Step 2: Persona</h2><p>Describe your AI partner for this session.</p><textarea id="setup-persona" class="input-text" rows="10" placeholder="Describe persona">${data.persona || 'An energetic and passionate girlfriend'}</textarea><br><button id="setup-next" class="my-button">Next</button>`;
+                    D.getElementById('setup-next').onclick = () => {
+                        personaInput.value = D.getElementById('setup-persona').value.trim();
+                        if (isReturningUser) { setupOverlay.style.display = 'none'; sendUserMessage(''); }
+                        else { step = 3; displayStep(); }
+                    };
+                } else if (step === 3 || step === 4) {
+                    const title = step === 3 ? "Set the Tip" : "Set the Base";
+                    const btnText = step === 3 ? "Set Tip" : "Next";
+                    setupBox.innerHTML = `<h2>Step ${step}: ${title}</h2><p>Move the Handy to the desired position and click '${btnText}'.</p><div><button id="d-down" class="my-button" style="width:auto;">&lt;&lt; Out</button><span id="d-val" style="padding:0 15px;">?</span>%<button id="d-up" class="my-button" style="width:auto;">In &gt;&gt;</button></div><button id="set-pos" class="my-button">${btnText}</button>`;
+                    let currentDepth = 50;
+                    const updateDepthDisplay = (val) => D.getElementById('d-val').textContent = val;
+                    const nudge = async (dir) => { const res = await apiCall('/nudge', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({direction:dir, key:myHandyKey})}); if (res) { currentDepth = res.depth_percent; updateDepthDisplay(currentDepth); } };
+                    D.getElementById('d-up').onclick = () => nudge('up');
+                    D.getElementById('d-down').onclick = () => nudge('down');
+                    D.getElementById('set-pos').onclick = async () => {
+                        if (step === 3) { D.minDepth = currentDepth; step = 4; displayStep(); }
+                        else { D.maxDepth = currentDepth; await apiCall('/set_depth_limits', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({min_depth:D.minDepth, max_depth:D.maxDepth})}); step = 5; displayStep(); }
+                    };
+                } else if (step === 5 || step === 6) {
+                    const title = step === 5 ? "Minimum Speed" : "Maximum Speed";
+                    const defaultVal = step === 5 ? 10 : 80;
+                    setupBox.innerHTML = `<h2>Step ${step}: Set ${title}</h2><p>Choose your preferred ${title.toLowerCase()}.</p><div class="slider-container"><input type="range" min="0" max="100" value="${defaultVal}" id="speed-slider"><span id="speed-val">${defaultVal}%</span></div><button id="set-speed" class="my-button">Next</button>`;
+                    const slider = D.getElementById('speed-slider');
+                    slider.oninput = () => D.getElementById('speed-val').textContent = `${slider.value}%`;
+                    D.getElementById('set-speed').onclick = async () => {
+                        if (step === 5) { D.minSpeed = slider.value; step = 6; displayStep(); }
+                        else { D.maxSpeed = slider.value; await apiCall('/set_speed_limits', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({min_speed:D.minSpeed, max_speed:D.maxSpeed})}); setupOverlay.style.display = 'none'; statusText.textContent = `Setup complete. Ready to chat.`; }
+                    };
+                }
+            }
+            displayStep();
+        }
+
+        async function startupCheck() {
+            const data = await apiCall('/check_settings');
+            if (data && data.configured) {
+                statusText.textContent = 'Welcome back! Settings loaded.';
+                myHandyKey = data.handy_key;
+                personaInput.value = data.persona;
+                if(data.ai_name) {
+                    aiName = data.ai_name;
+                    aiNameInput.value = aiName;
+                    D.querySelector('#typing-indicator .speaker-name').textContent = aiName;
+                }
+                if (data.pfp) {
+                    pfpPreview.src = data.pfp;
+                    typingIndicatorPfp.src = data.pfp;
+                }
+                if(data.elevenlabs_key) {
+                    elevenLabsKeyInput.value = data.elevenlabs_key;
+                    setElevenLabsKeyButton.click();
+                }
+                if (localStorage.getItem('sidebar_collapsed') === 'true') {
+                    D.body.classList.add('sidebar-collapsed');
+                }
+                D.getElementById('splash-screen').style.display = 'none';
+                renderSetup(true, data);
+            } else {
+                const startHandler = (e) => { if(e.key === 'Enter'){ D.removeEventListener('keydown', startHandler); D.getElementById('splash-screen').classList.add('hidden'); setTimeout(() => renderSetup(false), 1000); }};
+                D.addEventListener('keydown', startHandler);
+            }
+        }
+        
+        // Event Listeners
+        D.getElementById('send-chat-btn').addEventListener('click', () => sendUserMessage(userChatInput.value));
+        userChatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendUserMessage(userChatInput.value); });
+        setPersonaBtn.addEventListener('click', () => { sendUserMessage(''); statusText.textContent = 'Persona updated!'; });
+        setAiNameBtn.addEventListener('click', async () => {
+            const newName = aiNameInput.value.trim();
+            if (!newName) return;
+            const data = await apiCall('/set_ai_name', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: newName}) });
+            if (data && data.status === 'special_persona_activated') {
+                easterEggOverlay.innerHTML = `// WARNING: Personality Core Override Detected...<br>// Subject: ${data.persona}<br><br>Good luck.`;
+                easterEggOverlay.style.display = 'flex';
+                setTimeout(() => { easterEggOverlay.style.opacity = '1'; }, 10);
+                setTimeout(() => {
+                    easterEggOverlay.style.opacity = '0';
+                    setTimeout(() => {
+                        easterEggOverlay.style.display = 'none';
+                        aiName = data.persona;
+                        aiNameInput.value = aiName;
+                        D.querySelectorAll('.bot-bubble .speaker-name').forEach(el => el.textContent = aiName);
+                        addChatMessage('BOT', data.message);
+                    }, 1000);
+                }, 3000);
+            } else if (data && data.status === 'success') {
+                aiName = data.name;
+                statusText.textContent = `AI name updated to ${aiName}!`;
+                D.querySelectorAll('.bot-bubble .speaker-name').forEach(el => el.textContent = aiName);
+            }
+        });
+        toggleSidebarBtn.addEventListener('click', () => {
+            const isCollapsed = D.body.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebar_collapsed', isCollapsed);
+            setTimeout(resizeCanvas, 350);
+        });
+        pfpUploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64String = reader.result;
+                pfpPreview.src = base64String;
+                typingIndicatorPfp.src = base64String;
+                apiCall('/set_profile_picture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pfp_b64: base64String }) });
+            };
+            reader.readAsDataURL(file);
+        });
+        setElevenLabsKeyButton.addEventListener('click', async () => {
+            const apiKey = elevenLabsKeyInput.value.trim();
+            if(!apiKey) return;
+            const data = await apiCall('/setup_elevenlabs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({api_key:apiKey})});
+            if (data && data.status === 'success') {
+                const selectBox = D.getElementById('elevenlabs-voice-select-box');
+                selectBox.innerHTML = '<option value="">-- Pick a Voice --</option>';
+                for (const [name, id] of Object.entries(data.voices)) { selectBox.innerHTML += `<option value="${id}">${name}</option>`; }
+                selectBox.disabled = false;
+            }
+        });
+        D.getElementById('like-this-move-btn').addEventListener('click', async () => {
+            const data = await apiCall('/like_last_move', { method: 'POST' });
+            if (data && data.status === 'boosted') {
+                statusText.textContent = `Saved '${data.name}' to my memory!`;
+            } else { statusText.textContent = "Status: No active move to like."; }
+        });
+        const stopButtons = [D.getElementById('stop-auto-btn'), D.getElementById('emergency-stop-all-btn')];
+        stopButtons.forEach(btn => btn.addEventListener('click', () => {
+            imCloseBtn.style.display = 'none';
+            stopEdgingTimer();
+            if(btn.id === 'emergency-stop-all-btn') sendUserMessage('stop');
+            else apiCall('/stop_auto_mode', {method:'POST'});
+        }));
+        edgingModeBtn.addEventListener('click', () => {
+            apiCall('/start_edging_mode', {method:'POST'});
+            imCloseBtn.style.display = 'block';
+            startEdgingTimer();
+        });
+        imCloseBtn.addEventListener('click', () => {
+            apiCall('/signal_edge', { method: 'POST' });
+            imCloseBtn.style.transform = 'scale(0.95)';
+            setTimeout(() => { imCloseBtn.style.transform = ''; }, 100);
+        });
+        D.getElementById('elevenlabs-voice-select-box').addEventListener('change', (e) => apiCall('/set_elevenlabs_voice', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({voice_id: e.target.value, enabled:D.getElementById('enable-audio-checkbox').checked})}));
+        D.getElementById('enable-audio-checkbox').addEventListener('change', (e) => apiCall('/set_elevenlabs_voice', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({voice_id: D.getElementById('elevenlabs-voice-select-box').value, enabled: e.target.checked})}));
+        D.getElementById('start-auto-btn').addEventListener('click', () => sendUserMessage('take over'));
+        D.getElementById('milking-mode-btn').addEventListener('click', () => apiCall('/start_milking_mode', {method:'POST'}));
+
+        
+        // --- Anti-spam BOT cooldown (2s) ---
+        let __lastBotMsgAt = 0; // timestamp ms of last BOT message shown
+        const __BOT_COOLDOWN_MS = 2000;
+// Polling Loops
+        setInterval(async () => {
+            const data = await apiCall('/get_updates');
+            if (!data) return;
+            if (data instanceof Blob || (data.messages && data.messages.length > 0)) {
+                typingIndicator.style.display = 'none';
+            }
+            if (data instanceof Blob) {
+                const audio = new Audio(URL.createObjectURL(data));
+                audio.play();
+            } else if (data.messages) {
+                data.messages.forEach(msg => {
+    const now = Date.now();
+    if (now - __lastBotMsgAt >= __BOT_COOLDOWN_MS) {
+        addChatMessage('BOT', msg);
+        __lastBotMsgAt = now;
+    }
+});
+}
+        }, 1500);
+        setInterval(async () => {
+            const data = await apiCall('/get_status');
+            if (data) {
+                const emoji = {'Curious':'🤔','Teasing':'😉','Playful':'😜','Loving':'❤️','Excited':'✨','Passionate':'🔥','Seductive':'😈','Anticipatory':'👀','Breathless':'🥵','Dominant':'👑','Submissive':'🙇‍♀️','Vulnerable':'😳','Confident':'😏','Intimate':'🥰','Needy':'🥺','Overwhelmed':'🤯','Afterglow':'😌'}[data.mood] || '';
+                moodDisplay.textContent = `Mood: ${data.mood} ${emoji}`;
+                drawHandyVisualizer(data.speed || 0, data.depth || 0);
+            }
+        }, 500);
+
+        
+        // === Slideshow (Updates) ===
+        (function(){
+            const img = D.getElementById('upd-preview');
+            const prevBtn = D.getElementById('upd-prev');
+            const nextBtn = D.getElementById('upd-next');
+            const toggleBtn = D.getElementById('upd-toggle');
+            const slider = D.getElementById('upd-interval');
+            const ival = D.getElementById('upd-ival');
+
+            const stage = D.getElementById('upd-stage');
+            const stageImg = D.getElementById('upd-stage-img');
+            const pin = D.getElementById('upd-pin');
+            function mirrorToStage(){
+                if(stageImg && img && img.src) stageImg.src = img.src;
+            }
+
+            let list = [], playlist = [], idx = 0, timer = null, auto = false;
+
+            function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+            function show(){
+                if(!playlist.length){ img.src = ''; return; }
+                img.src = '/static/updates/' + encodeURIComponent(playlist[idx]) + '?t=' + Date.now();
+                mirrorToStage();
+            }
+            function next(){ if(!playlist.length) return; idx = (idx+1)%playlist.length; if(idx===0) playlist = shuffle(list.slice()); show(); }
+            function prev(){ if(!playlist.length) return; idx = (idx-1+playlist.length)%playlist.length; show(); }
+            function setAuto(on){
+                auto = on;
+                toggleBtn.textContent = on ? 'Stop' : 'Start';
+                if(timer) clearInterval(timer);
+                if(on){ timer = setInterval(next, parseInt(slider.value,10)*1000); }
+            }
+            fetch('/image_list_updates').then(r=>r.json()).then(arr=>{
+                list = Array.isArray(arr) ? arr : [];
+                if(list.length){ playlist = shuffle(list.slice()); idx = 0; show(); }
+            });
+            prevBtn.addEventListener('click', prev);
+            nextBtn.addEventListener('click', next);
+            slider.addEventListener('input', ()=>{ ival.textContent = slider.value + 's'; if(auto){ setAuto(true); } });
+            toggleBtn.addEventListener('click', ()=> setAuto(!auto));
+
+            pin?.addEventListener('change', ()=>{
+                if(pin.checked){ stage?.classList.remove('hidden'); mirrorToStage(); }
+                else { stage?.classList.add('hidden'); }
+            });
+
+        })();
+
+        
+        // === Slideshow (GIFs) ===
+        (function(){
+            const img = D.getElementById('upd2-preview');
+            const prevBtn = D.getElementById('upd2-prev');
+            const nextBtn = D.getElementById('upd2-next');
+            const toggleBtn = D.getElementById('upd2-toggle');
+            const slider = D.getElementById('upd2-interval');
+            const ival = D.getElementById('upd2-ival');
+            const pin = D.getElementById('upd2-pin');
+            const stage = D.getElementById('upd2-stage');
+            const stageImg = D.getElementById('upd2-stage-img');
+            let list = [], playlist = [], idx = 0, timer = null, auto = false;
+
+            function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+            function mirror(){ if(stageImg && img && img.src) stageImg.src = img.src; }
+            function show(){
+                if(!playlist.length){ img.src = ''; return; }
+                img.src = '/static/updates/gif/' + encodeURIComponent(playlist[idx]) + '?t=' + Date.now();
+                mirror();
+            }
+            function next(){ if(!playlist.length) return; idx = (idx+1)%playlist.length; if(idx===0) playlist = shuffle(list.slice()); show(); }
+            function prev(){ if(!playlist.length) return; idx = (idx-1+playlist.length)%playlist.length; show(); }
+            function setAuto(on){
+                auto = on;
+                toggleBtn.textContent = on ? 'Stop' : 'Start';
+                if(timer) clearInterval(timer);
+                if(on){ timer = setInterval(next, parseInt(slider.value,10)*1000); }
+            }
+            fetch('/image_list_updates_gif').then(r=>r.json()).then(arr=>{
+                list = Array.isArray(arr) ? arr : [];
+                if(list.length){ playlist = shuffle(list.slice()); idx = 0; show(); }
+            });
+            prevBtn?.addEventListener('click', prev);
+            nextBtn?.addEventListener('click', next);
+            slider?.addEventListener('input', ()=>{ ival.textContent = slider.value + 's'; if(auto){ setAuto(true); } });
+            toggleBtn?.addEventListener('click', ()=> setAuto(!auto));
+            pin?.addEventListener('change', ()=>{
+                if(pin.checked){ stage?.classList.remove('hidden'); mirror(); }
+                else { stage?.classList.add('hidden'); }
+            });
+        })();
+
+        
+        // === Floating Video (PiP) ===
+        (function(){
+            const D = document;
+            const chatView = D.getElementById('chat-view');
+            const win = D.getElementById('pip-window');
+            const header = D.getElementById('pip-header');
+            const resizer = D.getElementById('pip-resizer');
+            const video = D.getElementById('pip-video');
+
+            const inp = D.getElementById('pip-file');
+            const btnLoad = D.getElementById('pip-load');
+            const btnToggle = D.getElementById('pip-toggle');
+            const btnPlay = D.getElementById('pip-play');
+            const btnPause = D.getElementById('pip-pause');
+            const btnMinMax = D.getElementById('pip-minmax');
+            const btnClose = D.getElementById('pip-close');
+            const vol = D.getElementById('pip-volume');
+            const mute = D.getElementById('pip-mute');
+            const loop = D.getElementById('pip-loop');
+
+            let objectUrl = null;
+            let minimized = false;
+
+            function show(){ win.classList.add('show'); }
+            function hide(){ win.classList.remove('show'); }
+
+            btnToggle?.addEventListener('click', ()=>{
+                if(win.classList.contains('show')){ hide(); btnToggle.textContent='Mostra'; }
+                else { show(); btnToggle.textContent='Nascondi'; }
+            });
+
+            function loadFile(f){
+                try{
+                    if(objectUrl) URL.revokeObjectURL(objectUrl);
+                    objectUrl = URL.createObjectURL(f);
+                    video.src = objectUrl;
+                    video.loop = !!loop.checked;
+                    video.muted = !!mute.checked;
+                    video.volume = parseFloat(vol.value||'1');
+                    show();
+                    btnToggle.textContent='Nascondi';
+                    video.play().catch(()=>{});
+                }catch(e){ console.error(e); }
+            }
+
+            btnLoad?.addEventListener('click', ()=>{ if(!inp.files?.[0]) inp.click(); else loadFile(inp.files[0]); });
+            inp?.addEventListener('change', ()=>{ if(inp.files?.[0]) loadFile(inp.files[0]); });
+
+            btnPlay?.addEventListener('click', ()=> video.play());
+            btnPause?.addEventListener('click', ()=> video.pause());
+            vol?.addEventListener('input', ()=>{ video.volume=parseFloat(vol.value||'1'); if(video.volume>0){ video.muted=false; mute.checked=false;}});
+            mute?.addEventListener('change', ()=> video.muted = mute.checked);
+            loop?.addEventListener('change', ()=> video.loop = loop.checked);
+
+            btnMinMax?.addEventListener('click', ()=>{
+                minimized = !minimized;
+                if(minimized){ win.style.height = header.offsetHeight + 'px'; btnMinMax.textContent='▢'; }
+                else { win.style.height = Math.max(203, parseInt(localStorage.getItem('pip_h')||'203',10))+'px'; btnMinMax.textContent='—'; }
+                savePos();
+            });
+            btnClose?.addEventListener('click', ()=>{
+                video.pause(); video.removeAttribute('src'); video.load();
+                if(objectUrl){ URL.revokeObjectURL(objectUrl); objectUrl=null; }
+                hide(); btnToggle.textContent='Mostra';
+            });
+
+            // drag
+            (function(){
+                let ox=0, oy=0, dragging=false;
+                header?.addEventListener('mousedown',(e)=>{ dragging=true; ox=e.clientX-win.offsetLeft; oy=e.clientY-win.offsetTop; e.preventDefault(); });
+                window.addEventListener('mousemove',(e)=>{
+                    if(!dragging) return;
+                    let nx=e.clientX-ox, ny=e.clientY-oy;
+                    const r = chatView.getBoundingClientRect();
+                    const w = win.offsetWidth, h = win.offsetHeight;
+                    nx = Math.min(r.right-w, Math.max(r.left, nx));
+                    ny = Math.min(r.bottom-h, Math.max(r.top, ny));
+                    win.style.left = nx+'px'; win.style.top = ny+'px';
+                    win.style.right='auto'; win.style.bottom='auto';
+                });
+                window.addEventListener('mouseup',()=>{ if(dragging){ dragging=false; savePos(); }});
+            })();
+
+            // resize
+            (function(){
+                let sx=0, sy=0, sw=0, sh=0, resizing=false;
+                resizer?.addEventListener('mousedown',(e)=>{ resizing=true; sx=e.clientX; sy=e.clientY; sw=win.offsetWidth; sh=win.offsetHeight; e.preventDefault(); });
+                window.addEventListener('mousemove',(e)=>{
+                    if(!resizing) return;
+                    const dw=e.clientX-sx, dh=e.clientY-sy;
+                    const nw=Math.max(240, sw+dw), nh=Math.max(135, sh+dh);
+                    win.style.width=nw+'px'; win.style.height=nh+'px';
+                });
+                window.addEventListener('mouseup',()=>{ if(resizing){ resizing=false; savePos(); localStorage.setItem('pip_h', parseInt(win.style.height,10)); }});
+            })();
+
+            function savePos(){
+                const r = win.getBoundingClientRect();
+                localStorage.setItem('pip_pos', JSON.stringify({x:r.left,y:r.top,w:r.width,h:r.height}));
+            }
+            (function restore(){
+                try{
+                    const s = JSON.parse(localStorage.getItem('pip_pos')||'{}');
+                    if(s.x!=null) win.style.left = s.x+'px';
+                    if(s.y!=null) win.style.top = s.y+'px';
+                    if(s.w) win.style.width = s.w+'px';
+                    if(s.h) win.style.height = s.h+'px';
+                }catch(_){}
+            })();
+
+            // keyboard
+            window.addEventListener('keydown',(e)=>{
+                if(e.key.toLowerCase()==='m'){ mute.checked=!mute.checked; mute.dispatchEvent(new Event('change')); }
+                if(e.key.toLowerCase()==='l'){ loop.checked=!loop.checked; loop.dispatchEvent(new Event('change')); }
+            });
+        })();
+// Startup
+        window.addEventListener('resize', resizeCanvas);
+        D.addEventListener('DOMContentLoaded', () => {
+            resizeCanvas();
+            startupCheck();
+        });
+    
+
+// ===== Generic PiP controller =====
+function makePiP(winId, imgOrVideoEl, storageKey){
+    const win = document.getElementById(winId);
+    const header = win.querySelector('.pip-header');
+    const resizer = win.querySelector('.pip-resizer');
+    const minBtn = win.querySelector('.pip-minmax');
+    const closeBtn = win.querySelector('.pip-close');
+    const chatView = document.getElementById('chat-view');
+
+    let minimized = false;
+
+    function clampAndShowDefault(){
+        const r = chatView.getBoundingClientRect();
+        const w = win.offsetWidth || 480, h = win.offsetHeight || 270;
+        let left = parseInt(localStorage.getItem(storageKey+'_l')|| (r.right - w - 24),10);
+        let top  = parseInt(localStorage.getItem(storageKey+'_t')|| (r.top + 72),10);
+        let ww   = parseInt(localStorage.getItem(storageKey+'_w')|| w,10);
+        let hh   = parseInt(localStorage.getItem(storageKey+'_h')|| h,10);
+        // clamp
+        left = Math.min(r.right-ww, Math.max(r.left, left));
+        top  = Math.min(r.bottom-hh, Math.max(r.top, top));
+        win.style.left = left+'px'; win.style.top = top+'px';
+        win.style.width = ww+'px'; win.style.height = hh+'px';
+        win.style.right='auto'; win.style.bottom='auto';
+    }
+
+    function savePos(){
+        localStorage.setItem(storageKey+'_l', parseInt(win.style.left,10)||0);
+        localStorage.setItem(storageKey+'_t', parseInt(win.style.top,10)||0);
+        localStorage.setItem(storageKey+'_w', parseInt(win.style.width,10)||480);
+        localStorage.setItem(storageKey+'_h', parseInt(win.style.height,10)||270);
+    }
+
+    function show(){ win.classList.add('show'); win.classList.remove('hidden'); clampAndShowDefault(); }
+    function hide(){ win.classList.remove('show'); win.classList.add('hidden'); }
+
+    // init
+    clampAndShowDefault();
+
+    // drag
+    (function(){
+        let ox=0, oy=0, dragging=false;
+        header.addEventListener('mousedown',(e)=>{ dragging=true; ox=e.clientX-win.offsetLeft; oy=e.clientY-win.offsetTop; e.preventDefault(); });
+        window.addEventListener('mousemove',(e)=>{
+            if(!dragging) return;
+            let nx=e.clientX-ox, ny=e.clientY-oy;
+            const r = chatView.getBoundingClientRect();
+            const w = win.offsetWidth, h = win.offsetHeight;
+            nx = Math.min(r.right-w, Math.max(r.left, nx));
+            ny = Math.min(r.bottom-h, Math.max(r.top, ny));
+            win.style.left = nx+'px'; win.style.top = ny+'px';
+            win.style.right='auto'; win.style.bottom='auto';
+        });
+        window.addEventListener('mouseup',()=>{ if(dragging){ dragging=false; savePos(); } });
+    })();
+
+    // resize
+    (function(){
+        let sx=0, sy=0, sw=0, sh=0, resizing=false;
+        resizer.addEventListener('mousedown',(e)=>{ resizing=true; sx=e.clientX; sy=e.clientY; sw=win.offsetWidth; sh=win.offsetHeight; e.preventDefault(); });
+        window.addEventListener('mousemove',(e)=>{
+            if(!resizing) return;
+            const dw=e.clientX-sx, dh=e.clientY-sy;
+            const nw=Math.max(240, sw+dw), nh=Math.max(135, sh+dh);
+            win.style.width=nw+'px'; win.style.height=nh+'px';
+        });
+        window.addEventListener('mouseup',()=>{ if(resizing){ resizing=false; savePos(); } });
+    })();
+
+    // buttons
+    minBtn.addEventListener('click', ()=>{
+        minimized = !minimized;
+        if(minimized){ win.style.height = header.offsetHeight + 'px'; minBtn.textContent='▢'; }
+        else { win.style.height = (parseInt(localStorage.getItem(storageKey+'_h')||'270',10))+'px'; minBtn.textContent='—'; }
+        savePos();
+    });
+    closeBtn.addEventListener('click', ()=>{
+        hide();
+        if(imgOrVideoEl.tagName === 'VIDEO'){ imgOrVideoEl.pause(); }
+    });
+
+    return { show, hide };
+}
+
+// ===== Images PiP controller =====
+(function(){
+    const img = document.getElementById('pip-image');
+    const winCtl = makePiP('pip-image-window', img, 'pip_image');
+    const toggleBtn = document.getElementById('pip-image-toggle');
+    const reloadBtn = document.getElementById('pip-image-reload');
+    const startBtn = document.getElementById('pip-image-start');
+    const nextBtn = document.getElementById('pip-image-next');
+    const speed = document.getElementById('pip-image-speed');
+    const speedVal = document.getElementById('pip-image-speed-val');
+    let list=[], playlist=[], idx=0, timer=null, running=false;
+
+    function show(){
+        if(!playlist.length) return;
+        img.src = '/static/updates/immagini/' + playlist[idx];
+    }
+    function next(){ if(!playlist.length) return; idx=(idx+1)%playlist.length; show(); }
+    function setRunning(on){
+        running = on;
+        startBtn.textContent = on ? 'Stop' : 'Start';
+        if(timer) clearInterval(timer);
+        if(on){ timer = setInterval(next, parseInt(speed.value,10)*1000); }
+    }
+    toggleBtn.addEventListener('click', ()=>{ winCtl.show(); });
+    reloadBtn.addEventListener('click', ()=>{
+        fetch('/image_list_updates').then(r=>r.json()).then(arr=>{
+            list = Array.isArray(arr)?arr:[];
+            if(list.length){ playlist = list.sort(()=>Math.random()-0.5); idx=0; show(); }
+        });
+    });
+    nextBtn.addEventListener('click', next);
+    startBtn.addEventListener('click', ()=> setRunning(!running));
+    speed.addEventListener('input', ()=>{ speedVal.textContent = speed.value+'s'; if(running){ setRunning(true);} });
+    // initial load
+    reloadBtn.click();
+})();
+
+// ===== GIF PiP controller =====
+(function(){
+    const img = document.getElementById('pip-gif');
+    const winCtl = makePiP('pip-gif-window', img, 'pip_gif');
+    const toggleBtn = document.getElementById('pip-gif-toggle');
+    const reloadBtn = document.getElementById('pip-gif-reload');
+    const startBtn = document.getElementById('pip-gif-start');
+    const nextBtn = document.getElementById('pip-gif-next');
+    const speed = document.getElementById('pip-gif-speed');
+    const speedVal = document.getElementById('pip-gif-speed-val');
+    let list=[], playlist=[], idx=0, timer=null, running=false;
+
+    function show(){
+        if(!playlist.length) return;
+        img.src = '/static/updates/gif/' + playlist[idx];
+    }
+    function next(){ if(!playlist.length) return; idx=(idx+1)%playlist.length; show(); }
+    function setRunning(on){
+        running = on;
+        startBtn.textContent = on ? 'Stop' : 'Start';
+        if(timer) clearInterval(timer);
+        if(on){ timer = setInterval(next, parseInt(speed.value,10)*1000); }
+    }
+    toggleBtn.addEventListener('click', ()=>{ winCtl.show(); });
+    reloadBtn.addEventListener('click', ()=>{
+        fetch('/image_list_updates_gif').then(r=>r.json()).then(arr=>{
+            list = Array.isArray(arr)?arr:[];
+            if(list.length){ playlist = list.sort(()=>Math.random()-0.5); idx=0; show(); }
+        });
+    });
+    nextBtn.addEventListener('click', next);
+    startBtn.addEventListener('click', ()=> setRunning(!running));
+    speed.addEventListener('input', ()=>{ speedVal.textContent = speed.value+'s'; if(running){ setRunning(true);} });
+    // initial load
+    reloadBtn.click();
+})();
+
+// ===== Video playlist hookup (optional, keeps your existing PiP video) =====
+(function(){
+    const loadBtn = document.getElementById('pip-load');
+    const fileInput = document.getElementById('pip-file');
+    const playBtn = document.getElementById('pip-play');
+    const pauseBtn = document.getElementById('pip-pause');
+    const toggleBtn = document.getElementById('pip-toggle');
+    const video = document.getElementById('pip-video');
+    const muteChk = document.getElementById('pip-mute');
+    const volume = document.getElementById('pip-volume');
+    const loopChk = document.getElementById('pip-loop');
+
+    let playlist=[], idx=0;
+
+    // Enhance: if user doesn't pick a local file, auto-pick random from static/updates/video
+    function tryLoadFromServer(){
+        fetch('/video_list_updates').then(r=>r.json()).then(arr=>{
+            if(Array.isArray(arr) && arr.length){
+                playlist = arr.sort(()=>Math.random()-0.5);
+                idx = 0;
+                video.src = '/static/updates/video/' + playlist[idx];
+                video.loop = !!loopChk?.checked;
+                if(!muteChk?.checked){ video.muted = false; }
+            }
+        });
+    }
+
+    if(loadBtn){
+        loadBtn.addEventListener('click', ()=>{
+            if(fileInput && fileInput.files && fileInput.files[0]){
+                const file = fileInput.files[0];
+                const url = URL.createObjectURL(file);
+                video.src = url;
+            } else {
+                tryLoadFromServer();
+            }
+        });
+    }
+    // When video ends and not loop, advance
+    if(video){
+        video.addEventListener('ended', ()=>{
+            if(loopChk?.checked) return;
+            if(playlist.length){
+                idx = (idx+1)%playlist.length;
+                video.src = '/static/updates/video/' + playlist[idx];
+                video.play().catch(()=>{});
+            }
+        });
+    }
+})();
+
+// Audio PiP like video
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const prev=$('aud-prev'), play=$('aud-play'), pause=$('aud-pause'), nxt=$('aud-next');
+  const vol=$('aud-vol'), loop=$('aud-loop'), shuf=$('aud-shuf'), reload=$('aud-reload'), now=$('aud-now');
+  if(!vol||!play) return;
+  let list=[], order=[], idx=-1;
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.volume = (parseInt(vol.value,10)||80)/100;
+  audio.loop = !!(loop&&loop.checked);
+
+  function basename(url){ try{ return decodeURIComponent(url.split('/').pop()); } catch(_){ return url; } }
+  function fetchList(){
+    fetch('/audio_list_updates').then(r=>r.json()).then(arr=>{
+      list = Array.isArray(arr)? arr : [];
+      rebuild();
+      if(now) now.textContent = list.length? ('Pronti: '+list.length+' brani'): 'Nessun file in /static/updates/audio';
+    }).catch(()=>{});
+  }
+  function rebuild(){
+    order = list.map((_,i)=>i);
+    if(shuf && shuf.checked){
+      for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+    }
+    idx = -1;
+  }
+  function pickNext(){ if(!order.length) return -1; idx=(idx+1)%order.length; return order[idx]; }
+  function pickPrev(){ if(!order.length) return -1; idx=(idx-1+order.length)%order.length; return order[idx]; }
+  function playIndex(i){
+    if(i<0||i>=list.length) return;
+    const url = list[i] + '?t=' + Date.now();
+    audio.src = url;
+    audio.loop = !!(loop&&loop.checked);
+    audio.play().then(()=>{ if(now) now.textContent = '▶ ' + basename(list[i]); }).catch(()=>{});
+  }
+
+  vol.addEventListener('input', ()=> audio.volume = (parseInt(vol.value,10)||0)/100);
+  loop.addEventListener('change', ()=> audio.loop = !!loop.checked);
+  shuf.addEventListener('change', rebuild);
+  reload.addEventListener('click', fetchList);
+
+  play.addEventListener('click', ()=>{
+    if(!list.length){ fetchList(); setTimeout(()=>{ if(list.length){ playIndex(pickNext()); } }, 400); return; }
+    if(audio.paused && audio.src) audio.play().catch(()=>{}); else playIndex(pickNext());
+  });
+  pause.addEventListener('click', ()=> audio.pause());
+  nxt.addEventListener('click', ()=>{ if(!list.length){ fetchList(); return; } playIndex(pickNext()); });
+  prev.addEventListener('click', ()=>{ if(!list.length){ fetchList(); return; } playIndex(pickPrev()); });
+  audio.addEventListener('ended', ()=>{ if(!audio.loop){ playIndex(pickNext()); } });
+
+  fetchList();
+})();
+
+// === Manual Controls Panel wiring ===
+(function(){
+  const panel = document.getElementById('manual-panel');
+  if(!panel) return;
+  const content = document.getElementById('mp-content');
+  const toggle = document.getElementById('mp-toggle');
+  const handle = document.getElementById('mp-resize');
+  const sp = document.getElementById('ctl-sp'), dp = document.getElementById('ctl-dp'), rng = document.getElementById('ctl-rng');
+  const spv=document.getElementById('ctl-sp-val'), dpv=document.getElementById('ctl-dp-val'), rngv=document.getElementById('ctl-rng-val');
+  const full=document.getElementById('ctl-full'), adv=document.getElementById('ctl-adv'), advBox=document.getElementById('adv-box');
+  const startEl=document.getElementById('ctl-start'), endEl=document.getElementById('ctl-end');
+  const startVal=document.getElementById('ctl-start-val'), endVal=document.getElementById('ctl-end-val');
+  const apply=document.getElementById('ctl-apply');
+
+  function sync(){ spv.textContent=sp.value; dpv.textContent=dp.value; rngv.textContent=rng.value; if(startEl) startVal.textContent=startEl.value; if(endEl) endVal.textContent=endEl.value; }
+  ['input','change'].forEach(ev=>[sp,dp,rng,startEl,endEl].filter(Boolean).forEach(el=>el.addEventListener(ev,sync)));
+  sync();
+
+  // collapse
+  const CK='mp_collapsed_v1'; const HKEY='mp_height_v1';
+  let collapsed = localStorage.getItem(CK)==='1'; let savedH=parseInt(localStorage.getItem(HKEY)||'0',10);
+  function applyState(){ content.style.display = collapsed?'none':'block'; toggle.textContent = collapsed?'▴':'▾'; if(!collapsed && savedH>160){ content.style.maxHeight=savedH+'px'; content.style.overflowY='auto'; } }
+  applyState();
+  toggle.addEventListener('click', ()=>{ collapsed=!collapsed; localStorage.setItem(CK, collapsed?'1':'0'); applyState(); });
+
+  // resize
+  let drag=false, startY=0, startH=0;
+  handle.addEventListener('mousedown',(e)=>{ drag=true; startY=e.clientY; startH=content.offsetHeight||320; content.style.overflowY='auto'; e.preventDefault(); });
+  window.addEventListener('mousemove',(e)=>{ if(!drag||collapsed) return; const nh=Math.min(Math.max(160,startH+(e.clientY-startY)), window.innerHeight*0.6); content.style.maxHeight=nh+'px'; });
+  window.addEventListener('mouseup',()=>{ if(drag){ drag=false; savedH=parseInt(content.style.maxHeight||content.offsetHeight||'0',10); localStorage.setItem(HKEY, savedH); }});
+
+  // payload + send (debounced)
+  function payload(){ if(adv && adv.checked){ return { mode:'advanced', sp:+sp.value, start:+startEl.value, end:+endEl.value }; } return { sp:+sp.value, dp:+dp.value, rng:+rng.value, full: !!(full&&full.checked) }; }
+  function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+  const send = debounce(()=>{ fetch('/manual_move',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload())}).catch(()=>{}); }, 150);
+  [sp,dp,rng,startEl,endEl].filter(Boolean).forEach(el=>el.addEventListener('input', send));
+  if(apply) apply.addEventListener('click', ()=> fetch('/manual_move',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload())}).catch(()=>{}));
+
+  if(adv) adv.addEventListener('change',()=>{ const on=adv.checked; if(advBox) advBox.style.display= on?'block':'none'; if(full) full.disabled = on; });
+  if(full) full.addEventListener('change',()=>{ if(full.checked){ dp.value=50; rng.value=100; sync(); } send(); });
+})();
+
+// Post Orgasm launcher (safe, non-breaking)
+(function(){
+  const btn = document.getElementById('post-orgasm-btn');
+  if(!btn) return;
+  btn.addEventListener('click', ()=> {
+    try { apiCall('/start_post_orgasm_mode', {method:'POST'}); } catch(e){ /* no-op */ }
+  });
+
+})();
+
+// === Advanced Stroke Settings controller ===
+(function(){
+  const saveBtn = document.getElementById('adv-save-btn');
+  if (!saveBtn) return;
+  saveBtn.addEventListener('click', async () => {
+    const phases = {};
+    document.querySelectorAll('#adv-stroke-settings .adv-phase').forEach(sec => {
+      const phaseName = sec.dataset.phase;
+      if (!phaseName) return;
+      const spMin = parseInt(sec.querySelector('.adv-sp-min').value || '0', 10);
+      const spMax = parseInt(sec.querySelector('.adv-sp-max').value || '0', 10);
+      const dpMin = parseInt(sec.querySelector('.adv-dp-min').value || '0', 10);
+      const dpMax = parseInt(sec.querySelector('.adv-dp-max').value || '0', 10);
+      const rngMin = parseInt(sec.querySelector('.adv-rng-min').value || '0', 10);
+      const rngMax = parseInt(sec.querySelector('.adv-rng-max').value || '0', 10);
+      const durMinSec = parseFloat(sec.querySelector('.adv-dur-min').value || '0');
+      const durMaxSec = parseFloat(sec.querySelector('.adv-dur-max').value || '0');
+      phases[phaseName] = {
+        sp_min: spMin, sp_max: spMax,
+        dp_min: dpMin, dp_max: dpMax,
+        rng_min: rngMin, rng_max: rngMax,
+        dur_min: Math.round(durMinSec * 1000),
+        dur_max: Math.round(durMaxSec * 1000)
+      };
+    });
+    const numMoves = parseInt(document.getElementById('adv-num-moves').value || '10', 10);
+    const holdProb = parseFloat(document.getElementById('adv-hold-prob').value || '0.6');
+    try {
+      const res = await fetch('/set_advanced_settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ phases: phases, num_moves: numMoves, hold_probability: holdProb })
+      });
+      const data = await res.json();
+      if (data && data.status === 'success') {
+        alert('Advanced stroke settings updated.');
+      } else {
+        alert('Failed to update advanced settings.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update advanced settings.');
+    }
+  });
+})();
+</script>
+
+<script>
+document.getElementById('im-coming-btn')?.addEventListener('click', () => {
+    sendUserMessage("I'm coming");
+});
+</script>
+</body>
+</html>
