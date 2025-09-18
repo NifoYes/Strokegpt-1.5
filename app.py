@@ -63,39 +63,39 @@ def start_move_loop(moves: list[dict]):
     move_thread_stop_event = threading.Event()
 
     def _runner():
-        # Local copy of last seen moves list identity for change detection
-        last_moves_id = id(current_moves)
         while not move_thread_stop_event.is_set():
-            # capture the current moves at this time
             moves_snapshot = current_moves or []
-            last_moves_id = id(moves_snapshot)
+            snapshot_id = id(moves_snapshot)
+            phase_at_start = CURRENT_PHASE
+            if not moves_snapshot:
+                time.sleep(0.05)
+                continue
+
+            # Apply recovery clamp dynamically when building the script snapshot
+            script_moves = []
             for m in moves_snapshot:
                 if move_thread_stop_event.is_set():
                     break
-                # Apply recovery speed clamp on the fly
-                sp_val = m.get('sp', 50)
+                move_copy = dict(m)
                 if CURRENT_PHASE == 'RECOVERY':
-                    sp_val = min(sp_val, 15)
-                handy.move(sp_val, m.get('dp', 50), m.get('rng', 50))
-                # Sleep for the duration in small increments to allow immediate stop or update
-                remaining = m.get('duration', 0) / 1000.0
-                slice_size = 0.05
-                while remaining > 0:
-                    # If a stop is requested, break out quickly
-                    if move_thread_stop_event.is_set():
-                        break
-                    # Detect change of pattern and restart inner loop
-                    if id(current_moves) != last_moves_id:
-                        # Break out of the current move to start new pattern
-                        break
-                    t = slice_size if remaining > slice_size else remaining
-                    time.sleep(t)
-                    remaining -= t
-                # If pattern changed or stop requested, break early
-                if move_thread_stop_event.is_set() or id(current_moves) != last_moves_id:
-                    break
-            # Loop will restart with updated current_moves
-        # Thread exits without stopping the device; stopping is handled explicitly
+                    move_copy['sp'] = min(move_copy.get('sp', 50), 15)
+                script_moves.append(move_copy)
+
+            if move_thread_stop_event.is_set():
+                break
+
+            def _script_changed() -> bool:
+                if id(current_moves) != snapshot_id:
+                    return True
+                if CURRENT_PHASE != phase_at_start:
+                    return True
+                return False
+
+            handy.play_move_script(
+                script_moves,
+                stop_event=move_thread_stop_event,
+                script_changed=_script_changed,
+            )
         return
 
     move_thread = threading.Thread(target=_runner, daemon=True)
