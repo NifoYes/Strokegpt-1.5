@@ -1,7 +1,9 @@
 import os
 import sys
+import time
+import threading
 import requests
-from typing import Optional, Union
+from typing import Optional, Union, Callable
 
 Number = Union[int, float]
 
@@ -37,6 +39,9 @@ class HandyController:
         # Defaults read from environment; set 0 to fully disable any floor/preference.
         self.MIN_SPAN_POINTS: int = int(os.getenv("HANDY_MIN_SPAN", "0"))
         self.PREFERRED_SPAN_POINTS: int = int(os.getenv("HANDY_PREF_SPAN", "0"))
+
+        # Track whether manual mode has been initialised for the current batch
+        self._manual_mode_active: bool = False
 
     # ---------------- Configuration ----------------
 
@@ -87,6 +92,7 @@ class HandyController:
         self._send_command("hamp/stop")
         self.last_stroke_speed = 0
         self.last_relative_speed = 0
+        self._manual_mode_active = False
 
     def move(self, speed: Number, depth: Number, stroke_range: Number):
         """
@@ -108,13 +114,24 @@ class HandyController:
         dp_rel = self._pct(depth)
         rng_rel = self._pct(stroke_range)
 
-        # Enter manual mode & start HAMP
+        # Ensure we only initialise manual mode once per batch/script
+        self._ensure_manual_mode()
+
+        # Apply parameters immediately
+        self._apply_move_parameters(sp_rel, dp_rel, rng_rel)
+
+    def _ensure_manual_mode(self):
+        """Put the device in manual mode if it is not already active."""
+        if self._manual_mode_active:
+            return
         self._send_command("mode", {"mode": 0})
         self._send_command("hamp/start")
+        self._manual_mode_active = True
 
+    def _apply_move_parameters(self, sp_rel: float, dp_rel: float, rng_rel: float):
+        """Compute and send slide/velocity commands for the given relative values."""
         # --- Compute slide window (absolute points) ---
         calib_w = float(self.max_handy_depth - self.min_handy_depth)
-        # handle degenerate calibration
         if calib_w <= 0.0:
             calib_w = 100.0
 
@@ -125,20 +142,18 @@ class HandyController:
         min_span = int(self.MIN_SPAN_POINTS or 0)
         pref_span = int(self.PREFERRED_SPAN_POINTS or 0)
 
-        # If min/preferred are disabled (0), allow exact requested span.
         span_abs = requested_span_abs
         if pref_span > 0:
             span_abs = max(span_abs, pref_span)
         if min_span > 0:
             span_abs = max(span_abs, min_span)
 
-        span_abs = min(span_abs, int(calib_w))  # don't exceed physical range
+        span_abs = min(span_abs, int(calib_w))
 
         half = span_abs / 2.0
         slide_min = int(round(center_abs - half))
         slide_max = int(round(center_abs + half))
 
-        # Clamp while trying to preserve span_abs
         if slide_min < 0:
             slide_min = 0
             slide_max = min(100, slide_min + int(span_abs))
@@ -146,29 +161,73 @@ class HandyController:
             slide_max = 100
             slide_min = max(0, slide_max - int(span_abs))
 
-        # Final sanity: ensure ordering
         if slide_max < slide_min:
             slide_min, slide_max = slide_max, slide_min
 
         self._send_command("slide", {"min": slide_min, "max": slide_max})
 
-        # --- Velocity ---
         speed_w = float(self.max_user_speed - self.min_user_speed)
         if speed_w < 0:
             speed_w = 0
         final_vel = int(round(self.min_user_speed + speed_w * (sp_rel / 100.0)))
         self._send_command("hamp/velocity", {"velocity": final_vel})
 
-        # Save state
         self.last_relative_speed = int(round(sp_rel))
         self.last_depth_pos = int(round(dp_rel))
         self.last_stroke_speed = final_vel
 
-        # DEBUG: always print moves to console
         try:
             print(f"[HANDY DEBUG] sp={int(sp_rel)} dp={int(dp_rel)} rng={int(rng_rel)} vel={final_vel}")
         except Exception:
             pass
+
+    def play_move_script(
+        self,
+        moves: list[dict[str, Number]],
+        stop_event: Optional[threading.Event] = None,
+        script_changed: Optional[Callable[[], bool]] = None,
+    ):
+        """
+        Execute a batch of moves sequentially as a single script.
+
+        The device is put in manual mode once, the parameters of each move are
+        applied in turn, and the method sleeps for the requested duration while
+        periodically checking whether a stop was requested or a new script has
+        been scheduled.
+        """
+        if not self.handy_key:
+            return
+        if not moves:
+            return
+
+        for move in moves:
+            if stop_event and stop_event.is_set():
+                break
+            if script_changed and script_changed():
+                break
+
+            sp_rel = self._pct(move.get("sp", 0))
+            dp_rel = self._pct(move.get("dp", 50))
+            rng_rel = self._pct(move.get("rng", 50))
+            duration_ms = int(move.get("duration", 0) or 0)
+
+            if int(sp_rel) <= 0:
+                self.stop()
+                continue
+
+            self._ensure_manual_mode()
+            self._apply_move_parameters(sp_rel, dp_rel, rng_rel)
+
+            remaining = duration_ms / 1000.0
+            slice_size = 0.05
+            while remaining > 0:
+                if stop_event and stop_event.is_set():
+                    return
+                if script_changed and script_changed():
+                    return
+                t_sleep = slice_size if remaining > slice_size else remaining
+                time.sleep(t_sleep)
+                remaining -= t_sleep
 
     # Optional helpers
     def get_position_mm(self) -> Optional[float]:
